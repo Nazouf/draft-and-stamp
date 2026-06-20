@@ -178,22 +178,6 @@
     color:var(--paper);
   }
 
-  .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-  @media (max-width:520px){.mode-grid{grid-template-columns:1fr;}}
-  .mode-card{
-    text-align:left;
-    border:1.5px solid var(--paper-line);
-    background:var(--paper-soft);
-    border-radius:6px;
-    padding:14px 16px;
-    cursor:pointer;
-    transition:all .12s ease;
-  }
-  .mode-card:hover{border-color:var(--red);}
-  .mode-card.selected{border-color:var(--red);background:#F8EFE8;}
-  .mode-card .mc-title{font-weight:700;margin-bottom:3px;}
-  .mode-card .mc-sub{color:var(--muted);font-size:0.85rem;}
-
   .btn{
     font-weight:600;
     padding:12px 22px;
@@ -459,7 +443,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.5.4
+    &nbsp;·&nbsp; v1.5.5
   </div>
 </div>
 
@@ -1813,16 +1797,11 @@ function buildGenerateMsg(){
     "Destination: " + state.destination,
     "Category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
     "Output format requested: " + (c.output_format || "auto"),
-    "Mode: " + state.mode,
     "Stakes: " + c.stakes,
     ""
   ];
-  if (state.mode === "fast"){
-    lines.push("No interview was conducted — fill gaps with the single most reasonable default and disclose every assumption per your instructions.");
-  } else {
-    lines.push("Interview answers (JSON):");
-    lines.push(JSON.stringify(state.qaHistory.map(q => ({question:q.text, answer:q.answer}))));
-  }
+  lines.push("Interview answers (JSON):");
+  lines.push(JSON.stringify(state.qaHistory.map(q => ({question:q.text, answer:q.answer}))));
   if (c.stakes === "sensitive" && state.requiredTopics.length){
     lines.push("");
     lines.push("Domain-risk topics flagged by the review step, with status (JSON):");
@@ -1887,12 +1866,7 @@ function proceedFromClassification(){
 }
 
 function afterConsiderations(){
-  const c = state.classification;
-  if (state.mode === "fast"){
-    if (c.complexity === "big") runStagePlanner(); else runGenerate();
-  } else {
-    runSelectQuestion();
-  }
+  runSelectQuestion();
 }
 
 async function runConsiderations(){
@@ -1903,9 +1877,7 @@ async function runConsiderations(){
     logUsage("considerations", FAST_MODEL, usage);
     state.requiredTopics = (json.required_topics || []).map(t => ({id:t.id, label:t.label, reason:t.reason, dismissed:false, covered:false}));
     state.considerationsDone = true;
-    // Fast mode never shows extra screens — the list still flows into generation
-    // for assumption disclosure, it just doesn't pause for a click here.
-    if (state.mode === "fast" || !state.requiredTopics.length){
+    if (!state.requiredTopics.length){
       afterConsiderations();
     } else {
       state.screen = "considerations";
@@ -2097,14 +2069,6 @@ function destinationPills(){
   ).join("") + '</div>';
 }
 
-function modeCards(){
-  return '<div class="mode-grid">' +
-    '<button class="mode-card ' + (state.mode==="fast"?"selected":"") + '" data-action="set-mode" data-value="fast">' +
-      '<div class="mc-title">Quick draft</div><div class="mc-sub">Best guess now, no questions asked.</div></button>' +
-    '<button class="mode-card ' + (state.mode==="interview"?"selected":"") + '" data-action="set-mode" data-value="interview">' +
-      '<div class="mc-title">Guided interview</div><div class="mc-sub">A few quick questions first, for a sharper result.</div></button>' +
-  '</div>';
-}
 
 function renderStart(){
   return '' +
@@ -2116,8 +2080,6 @@ function renderStart(){
     (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
     '<label class="field-label">Where will you paste this prompt?</label>' +
     destinationPills() +
-    '<label class="field-label">How should we get there?</label>' +
-    modeCards() +
     '<div class="btn-row"><button class="btn btn-primary" data-action="start">Start drafting</button></div>';
 }
 
@@ -2606,7 +2568,6 @@ document.getElementById("app").addEventListener("click", function(e){
   const action = el.dataset.action;
   switch(action){
     case "set-destination": state.destination = el.dataset.value; renderAll(); break;
-    case "set-mode": state.mode = el.dataset.value; renderAll(); break;
     case "start": handleStartClick(); break;
     case "continue-after-classification": proceedFromClassification(); break;
     case "toggle-required-topic": toggleRequiredTopic(el.dataset.value); break;
