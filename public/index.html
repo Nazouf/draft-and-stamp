@@ -399,11 +399,20 @@
   }
   .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--paper-line);}
   .auth-input{
-    width:100%;border:1.5px solid var(--paper-line);background:var(--paper-soft);
+    width:100%;box-sizing:border-box;border:1.5px solid var(--paper-line);background:var(--paper-soft);
     border-radius:4px;padding:12px 14px;font-family:'Public Sans',sans-serif;
     font-size:0.95rem;color:var(--ink);margin-bottom:10px;display:block;
   }
   .auth-input:focus{border-color:var(--red);outline:none;}
+  .auth-pw-wrap{position:relative;margin-bottom:10px;}
+  .auth-pw-wrap .auth-input{margin-bottom:0;padding-right:58px;}
+  .auth-pw-toggle{
+    position:absolute;right:10px;top:50%;transform:translateY(-50%);
+    background:none;border:none;cursor:pointer;color:var(--muted);
+    font-size:0.78rem;font-family:inherit;font-weight:600;letter-spacing:.02em;
+    padding:4px 6px;line-height:1;text-transform:uppercase;
+  }
+  .auth-pw-toggle:hover{color:var(--ink);}
   .auth-msg{font-size:0.85rem;margin-bottom:10px;border-radius:4px;padding:8px 12px;}
   .auth-error{color:var(--red);background:#F8EFE8;border:1px solid var(--red);}
   .auth-success{color:var(--green);background:#EAF1EC;border:1px solid var(--green);}
@@ -430,7 +439,7 @@
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
     &nbsp;·&nbsp; <a href="/admin">Admin</a>
-    &nbsp;·&nbsp; v1.4.1
+    &nbsp;·&nbsp; v1.4.2
   </div>
 </div>
 
@@ -2274,7 +2283,10 @@ function authFormHTML(isSignUp, includeClose){
     (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
     (authError   ? '<div class="auth-msg auth-error">'   + esc(authError)   + '</div>' : '') +
     '<input type="email" id="auth-email" class="auth-input" placeholder="Email" autocomplete="email">' +
-    '<input type="password" id="auth-password" class="auth-input" placeholder="Password (6+ characters)" autocomplete="' + (isSignUp ? 'new-password' : 'current-password') + '">' +
+    '<div class="auth-pw-wrap">' +
+      '<input type="password" id="auth-password" class="auth-input" placeholder="Password (6+ chars)" autocomplete="' + (isSignUp ? 'new-password' : 'current-password') + '">' +
+      '<button type="button" class="auth-pw-toggle" id="auth-pw-toggle" tabindex="-1">Show</button>' +
+    '</div>' +
     '<button class="btn btn-primary" data-action="auth-submit" style="width:100%;margin-top:4px;" ' + (authLoading ? 'disabled' : '') + '>' +
       (authLoading ? 'Please wait…' : (isSignUp ? 'Create account' : 'Sign in')) +
     '</button>' +
@@ -2283,13 +2295,20 @@ function authFormHTML(isSignUp, includeClose){
     '</button>';
 }
 
-// Wires only what data-action can't handle: close button + Enter key in password field.
+// Wires only what data-action can't handle: close button, Enter key, password reveal.
 function wireAuthForm(isSignUp){
-  const closeBtn = document.getElementById("auth-close-btn");
-  const pwField  = document.getElementById("auth-password");
+  const closeBtn  = document.getElementById("auth-close-btn");
+  const pwField   = document.getElementById("auth-password");
+  const pwToggle  = document.getElementById("auth-pw-toggle");
   if (closeBtn) closeBtn.onclick = closeLogin;
   if (pwField)  pwField.onkeydown = function(e){
     if (e.key === "Enter") isSignUp ? signUpWithEmail() : signInWithEmail();
+  };
+  if (pwToggle) pwToggle.onclick = function(){
+    if (!pwField) return;
+    const showing = pwField.type === "text";
+    pwField.type = showing ? "password" : "text";
+    this.textContent = showing ? "Show" : "Hide";
   };
 }
 
