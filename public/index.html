@@ -352,9 +352,13 @@
     font-family:'IBM Plex Mono',monospace;font-size:0.86rem;line-height:1.6;
     white-space:pre-wrap;word-break:break-word;margin:0;
   }
-  .feedback-row{display:flex;align-items:center;gap:10px;margin-top:24px;}
-  .fb-btn{border:1.5px solid var(--paper-line);background:var(--paper-soft);border-radius:5px;padding:8px 12px;cursor:pointer;font-size:1rem;}
+  .feedback-block{margin-top:28px;border-top:1px solid var(--paper-line);padding-top:20px;}
+  .feedback-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+  .fb-label{font-size:0.88rem;color:var(--muted);flex:1;line-height:1.4;}
+  .fb-btn{border:1.5px solid var(--paper-line);background:var(--paper-soft);border-radius:6px;padding:10px 18px;cursor:pointer;font-size:1.5rem;line-height:1;transition:all .1s ease;}
+  .fb-btn:hover{border-color:var(--ink);transform:scale(1.08);}
   .fb-btn.active{border-color:var(--green);background:#EAF1EC;}
+  .fb-btn.active-down{border-color:var(--red);background:#F8EFE8;}
   .ledger-toggle{margin-top:26px;background:none;border:none;color:var(--muted);font-size:0.82rem;cursor:pointer;text-decoration:underline;padding:0;}
   .ledger-table{width:100%;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:0.78rem;border-collapse:collapse;}
   .ledger-table th,.ledger-table td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--paper-line);}
@@ -438,7 +442,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.4.3
+    &nbsp;·&nbsp; v1.5.0
   </div>
 </div>
 
@@ -1499,14 +1503,12 @@ async function saveRun(){
   } catch(e){ console.error("saveRun:", e); return null; }
 }
 
-async function saveFeedbackToDb(rating){
-  if (!sbClient || !currentRunId) return;
-  try{
-    await sbClient.from("feedback").insert({
-      run_id: currentRunId,
-      user_id: currentUser?.id || null,
-      rating: rating === "up" ? 1 : -1
-    });
+async function saveFeedbackToDb(field, value){
+  if (!sbClient || !currentRunId || !currentUser) return;
+  try {
+    const row = { run_id: currentRunId, user_id: currentUser.id };
+    row[field] = value === "up" ? 1 : -1;
+    await sbClient.from("feedback").upsert(row, { onConflict: "run_id,user_id" });
   } catch(e){ console.error("saveFeedback:", e); }
 }
 
@@ -1531,6 +1533,7 @@ function freshState(){
     finalResult:null,
     usageEvents:[],
     feedback:null,
+    resultsFeedback:null,
     error:null,
     startError:null,
     gateReason:null,
@@ -2262,10 +2265,17 @@ function renderResult(){
     (currentUser
       ? '<p class="cost-line">Saved to your account &middot; ' + esc(currentUser.email) + '</p>'
       : '<p class="cost-line"><button class="link-btn" style="color:var(--muted);" data-action="open-login">Sign in to save your prompts across sessions</button></p>') +
-    '<div class="feedback-row">' +
-      '<span style="font-size:0.88rem;color:var(--muted);">Was this prompt good?</span>' +
-      '<button class="fb-btn" id="fb-up" data-action="feedback" data-value="up">👍</button>' +
-      '<button class="fb-btn" id="fb-down" data-action="feedback" data-value="down">👎</button>' +
+    '<div class="feedback-block">' +
+      '<div class="feedback-row">' +
+        '<span class="fb-label">Was the prompt well-written?</span>' +
+        '<button class="fb-btn' + (state.feedback === "up" ? " active" : state.feedback === "down" ? " active-down" : "") + '" id="fb-prompt-up" data-action="feedback-prompt" data-value="up">👍</button>' +
+        '<button class="fb-btn' + (state.feedback === "down" ? " active-down" : state.feedback === "up" ? " active" : "") + '" id="fb-prompt-down" data-action="feedback-prompt" data-value="down">👎</button>' +
+      '</div>' +
+      '<div class="feedback-row">' +
+        '<span class="fb-label">Did it get you good results when you used it?</span>' +
+        '<button class="fb-btn' + (state.resultsFeedback === "up" ? " active" : "") + '" id="fb-results-up" data-action="feedback-results" data-value="up">👍</button>' +
+        '<button class="fb-btn' + (state.resultsFeedback === "down" ? " active-down" : "") + '" id="fb-results-down" data-action="feedback-results" data-value="down">👎</button>' +
+      '</div>' +
     '</div>' +
     '<button class="ledger-toggle" data-action="toggle-ledger">' + (state.ledgerOpen?"Hide":"Show") + ' what happened behind the scenes</button>' +
     (state.ledgerOpen ? renderLedger() : '') +
@@ -2474,13 +2484,22 @@ function copyAllPrompts(){
   copyTextToClipboard(joined).then(() => flashCopied(btn)).catch(() => flashCopyFailed(btn));
 }
 
-function setFeedback(value){
+function setPromptFeedback(value){
   state.feedback = value;
-  const up = document.getElementById("fb-up");
-  const down = document.getElementById("fb-down");
-  if (up) up.classList.toggle("active", value === "up");
-  if (down) down.classList.toggle("active", value === "down");
-  saveFeedbackToDb(value);
+  const up   = document.getElementById("fb-prompt-up");
+  const down = document.getElementById("fb-prompt-down");
+  if (up)   up.className   = "fb-btn" + (value === "up"   ? " active"      : "");
+  if (down) down.className = "fb-btn" + (value === "down" ? " active-down" : "");
+  saveFeedbackToDb("rating", value);
+}
+
+function setResultsFeedback(value){
+  state.resultsFeedback = value;
+  const up   = document.getElementById("fb-results-up");
+  const down = document.getElementById("fb-results-down");
+  if (up)   up.className   = "fb-btn" + (value === "up"   ? " active"      : "");
+  if (down) down.className = "fb-btn" + (value === "down" ? " active-down" : "");
+  saveFeedbackToDb("results_rating", value);
 }
 
 /* =====================================================================
@@ -2548,7 +2567,8 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
-    case "feedback": setFeedback(el.dataset.value); break;
+    case "feedback-prompt":  setPromptFeedback(el.dataset.value);  break;
+    case "feedback-results": setResultsFeedback(el.dataset.value); break;
     case "toggle-ledger": state.ledgerOpen = !state.ledgerOpen; renderAll(); break;
     case "toggle-decisions": state.decisionsOpen = !state.decisionsOpen; renderAll(); break;
   }
