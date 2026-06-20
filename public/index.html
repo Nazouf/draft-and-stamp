@@ -438,8 +438,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; <a href="/admin">Admin</a>
-    &nbsp;·&nbsp; v1.4.2
+    &nbsp;·&nbsp; v1.4.3
   </div>
 </div>
 
@@ -1380,6 +1379,7 @@ For unstaged or single-stage tasks, "prompts" contains exactly one entry with
    ===================================================================== */
 let sbClient = null;
 let currentUser = null;
+let isAdmin = false;
 let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
 let currentRunId = null;
@@ -1387,6 +1387,14 @@ let authMode = "signin"; // "signin" | "signup"
 let authLoading = false;
 let authError = null;
 let authSuccess = null;
+
+async function fetchIsAdmin(user){
+  if (!user || !sbClient) return false;
+  try {
+    const { data } = await sbClient.from("profiles").select("is_admin").eq("id", user.id).single();
+    return data?.is_admin === true;
+  } catch(e){ return false; }
+}
 
 async function initApp(){
   let cfg = {};
@@ -1397,9 +1405,11 @@ async function initApp(){
     sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
     const { data: { session } } = await sbClient.auth.getSession();
     currentUser = session?.user || null;
-    sbClient.auth.onAuthStateChange((_event, session) => {
+    isAdmin = await fetchIsAdmin(currentUser);
+    sbClient.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       authLoading = false;
+      isAdmin = await fetchIsAdmin(currentUser);
       renderAll();
     });
   }
@@ -2043,14 +2053,14 @@ function esc(s){
 }
 
 function renderTopbar(){
-  let html = '';
   if (!currentUser){
-    // Signed-out state: no actions in topbar — auth screen is the whole page
     document.getElementById("topbar-right").innerHTML = '';
     return;
   }
+  let html = '';
   if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
   html += '<span class="chip">' + esc(currentUser.email) + '</span>';
+  if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:6px 14px;font-size:0.82rem;text-decoration:none;">Admin</a>';
   html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
   html += '<button class="link-btn" data-action="start-over">Start over</button>';
   document.getElementById("topbar-right").innerHTML = html;
