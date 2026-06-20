@@ -430,7 +430,7 @@
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
     &nbsp;·&nbsp; <a href="/admin">Admin</a>
-    &nbsp;·&nbsp; v1.3
+    &nbsp;·&nbsp; v1.4
   </div>
 </div>
 
@@ -1371,6 +1371,7 @@ For unstaged or single-stage tasks, "prompts" contains exactly one entry with
    ===================================================================== */
 let sbClient = null;
 let currentUser = null;
+let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
 let currentRunId = null;
 let authMode = "signin"; // "signin" | "signup"
@@ -1389,9 +1390,17 @@ async function initApp(){
     currentUser = session?.user || null;
     sbClient.auth.onAuthStateChange((_event, session) => {
       currentUser = session?.user || null;
+      authLoading = false;
       renderAll();
     });
   }
+  appInitialized = true;
+  renderAll();
+}
+
+// Refreshes whichever auth surface is currently visible (inline screen or modal).
+function refreshAuth(){
+  if (document.getElementById("auth-overlay").style.display !== "none") renderAuthModal();
   renderAll();
 }
 
@@ -1406,32 +1415,33 @@ function closeLogin(){
 
 async function signInWithEmail(){
   if (!sbClient || authLoading) return;
-  const email = document.getElementById("auth-email").value.trim();
-  const password = document.getElementById("auth-password").value;
-  if (!email || !password){ authError = "Enter your email and password."; renderAuthModal(); return; }
-  authLoading = true; authError = null; renderAuthModal();
+  const emailEl = document.getElementById("auth-email");
+  const passEl  = document.getElementById("auth-password");
+  if (!emailEl || !passEl) return;
+  const email    = emailEl.value.trim();
+  const password = passEl.value;
+  if (!email || !password){ authError = "Enter your email and password."; refreshAuth(); return; }
+  authLoading = true; authError = null; refreshAuth();
   const { error } = await sbClient.auth.signInWithPassword({ email, password });
   authLoading = false;
-  if (error){ authError = error.message; renderAuthModal(); }
-  else { closeLogin(); }
+  if (error){ authError = error.message; refreshAuth(); }
+  // Success: onAuthStateChange fires, sets currentUser, calls renderAll()
 }
 
 async function signUpWithEmail(){
   if (!sbClient || authLoading) return;
-  const email = document.getElementById("auth-email").value.trim();
-  const password = document.getElementById("auth-password").value;
-  if (!email || !password){ authError = "Enter your email and password."; renderAuthModal(); return; }
-  if (password.length < 6){ authError = "Password must be at least 6 characters."; renderAuthModal(); return; }
-  authLoading = true; authError = null; renderAuthModal();
+  const emailEl = document.getElementById("auth-email");
+  const passEl  = document.getElementById("auth-password");
+  if (!emailEl || !passEl) return;
+  const email    = emailEl.value.trim();
+  const password = passEl.value;
+  if (!email || !password){ authError = "Enter your email and password."; refreshAuth(); return; }
+  if (password.length < 6){ authError = "Password must be at least 6 characters."; refreshAuth(); return; }
+  authLoading = true; authError = null; refreshAuth();
   const { error } = await sbClient.auth.signUp({ email, password });
   authLoading = false;
-  if (error){ authError = error.message; renderAuthModal(); }
-  else { authSuccess = "Check your email to confirm your account, then sign in."; authMode = "signin"; renderAuthModal(); }
-}
-
-async function signInWithGoogle(){
-  if (!sbClient) return;
-  await sbClient.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+  if (error){ authError = error.message; refreshAuth(); }
+  else { authSuccess = "Check your email to confirm, then sign in."; authMode = "signin"; refreshAuth(); }
 }
 
 async function signOut(){
@@ -2017,15 +2027,14 @@ function esc(s){
 
 function renderTopbar(){
   let html = '';
-  if (unrestrictedMode){
-    html += '<span class="chip">Beta &middot; unlimited</span>';
+  if (!currentUser){
+    // Signed-out state: no actions in topbar — auth screen is the whole page
+    document.getElementById("topbar-right").innerHTML = '';
+    return;
   }
-  if (currentUser){
-    html += '<span class="chip">' + esc(currentUser.email) + '</span>';
-    html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
-  } else {
-    html += '<button class="link-btn" data-action="open-login">Sign in</button>';
-  }
+  if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
+  html += '<span class="chip">' + esc(currentUser.email) + '</span>';
+  html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
   html += '<button class="link-btn" data-action="start-over">Start over</button>';
   document.getElementById("topbar-right").innerHTML = html;
 }
@@ -2250,47 +2259,72 @@ function renderErrorBanner(){
     '<div class="btn-row"><button class="btn btn-primary" data-action="retry">Try again</button><button class="btn" data-action="start-over">Start over</button></div></div>';
 }
 
+function authFormHTML(isSignUp, includeClose){
+  return (includeClose ? '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' : '') +
+    '<h2 class="auth-title">' + (isSignUp ? "Create account" : "Sign in") + '</h2>' +
+    '<p class="auth-sub">Free during beta — save your prompts across sessions.</p>' +
+    (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
+    (authError   ? '<div class="auth-msg auth-error">'   + esc(authError)   + '</div>' : '') +
+    '<input type="email" id="auth-email" class="auth-input" placeholder="Email" autocomplete="email">' +
+    '<input type="password" id="auth-password" class="auth-input" placeholder="Password (6+ characters)" autocomplete="' + (isSignUp ? 'new-password' : 'current-password') + '">' +
+    '<button class="btn btn-primary" data-action="auth-submit" style="width:100%;margin-top:4px;" ' + (authLoading ? 'disabled' : '') + '>' +
+      (authLoading ? 'Please wait…' : (isSignUp ? 'Create account' : 'Sign in')) +
+    '</button>' +
+    '<button class="auth-toggle" data-action="auth-toggle">' +
+      (isSignUp ? "Already have an account? Sign in" : "No account yet? Sign up free") +
+    '</button>';
+}
+
+// Wires only what data-action can't handle: close button + Enter key in password field.
+function wireAuthForm(isSignUp){
+  const closeBtn = document.getElementById("auth-close-btn");
+  const pwField  = document.getElementById("auth-password");
+  if (closeBtn) closeBtn.onclick = closeLogin;
+  if (pwField)  pwField.onkeydown = function(e){
+    if (e.key === "Enter") isSignUp ? signUpWithEmail() : signInWithEmail();
+  };
+}
+
 function renderAuthModal(){
   const box = document.getElementById("auth-modal-box");
   if (!box) return;
   const isSignUp = authMode === "signup";
-  box.innerHTML =
-    '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' +
-    '<h2 class="auth-title">' + (isSignUp ? "Create account" : "Sign in") + '</h2>' +
-    '<p class="auth-sub">Save your prompts and access them across devices.</p>' +
-    (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
-    (sbClient
-      ? '<button class="auth-google-btn" id="auth-google-btn">Continue with Google</button>' +
-        '<div class="auth-divider"><span>or email</span></div>' +
-        (authError ? '<div class="auth-msg auth-error">' + esc(authError) + '</div>' : '') +
-        '<input type="email" id="auth-email" class="auth-input" placeholder="Email">' +
-        '<input type="password" id="auth-password" class="auth-input" placeholder="Password (6+ characters)">' +
-        '<button class="btn btn-primary" id="auth-submit-btn" style="width:100%;" ' + (authLoading ? 'disabled' : '') + '>' +
-          (authLoading ? 'Please wait…' : (isSignUp ? 'Create account' : 'Sign in')) +
-        '</button>' +
-        '<button class="auth-toggle" id="auth-toggle-btn">' +
-          (isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up") +
-        '</button>'
-      : '<p style="color:var(--muted);font-size:0.9rem;">Authentication is not yet configured on this server.</p>');
+  box.innerHTML = sbClient
+    ? authFormHTML(isSignUp, true)
+    : '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' +
+      '<p style="color:var(--muted);font-size:0.9rem;margin-top:8px;">Authentication is not configured on this server.</p>';
+  wireAuthForm(isSignUp);
+}
 
-  document.getElementById("auth-close-btn").onclick = closeLogin;
-  if (sbClient){
-    document.getElementById("auth-google-btn").onclick = signInWithGoogle;
-    document.getElementById("auth-submit-btn").onclick = isSignUp ? signUpWithEmail : signInWithEmail;
-    document.getElementById("auth-toggle-btn").onclick = function(){
-      authMode = (authMode === "signin") ? "signup" : "signin";
-      authError = null; authSuccess = null;
-      renderAuthModal();
-    };
-    const pwField = document.getElementById("auth-password");
-    pwField.onkeydown = function(e){ if (e.key === "Enter") isSignUp ? signUpWithEmail() : signInWithEmail(); };
-  }
+function renderAuthScreen(){
+  const isSignUp = authMode === "signup";
+  return '' +
+    '<h1 class="title">Draft &amp; Stamp</h1>' +
+    '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
+    '<p class="meta-caption" style="margin-bottom:30px;">Sign in to get started — free during beta.</p>' +
+    (sbClient
+      ? authFormHTML(isSignUp, false)
+      : '<p style="color:var(--muted);">Auth not configured — check server env vars.</p>');
 }
 
 function renderAll(){
   renderTopbar();
   const app = document.getElementById("app");
   let body = "";
+
+  if (!appInitialized){
+    body = renderLoading("Loading…");
+    app.innerHTML = body;
+    return;
+  }
+
+  if (!currentUser){
+    body = renderAuthScreen();
+    app.innerHTML = body;
+    wireAuthForm(authMode === "signup");
+    return;
+  }
+
   switch(state.screen){
     case "start": body = renderStart(); break;
     case "classifying": body = renderLoading("Reading what you wrote…"); break;
@@ -2467,6 +2501,14 @@ document.getElementById("app").addEventListener("click", function(e){
     case "back-to-start": backToStart(); break;
     case "open-login": openLogin(); break;
     case "sign-out": signOut(); break;
+    case "auth-submit":
+      if (authMode === "signup") signUpWithEmail(); else signInWithEmail();
+      break;
+    case "auth-toggle":
+      authMode = (authMode === "signin") ? "signup" : "signin";
+      authError = null; authSuccess = null;
+      refreshAuth();
+      break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
     case "feedback": setFeedback(el.dataset.value); break;
