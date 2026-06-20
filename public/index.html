@@ -352,13 +352,27 @@
     font-family:'IBM Plex Mono',monospace;font-size:0.86rem;line-height:1.6;
     white-space:pre-wrap;word-break:break-word;margin:0;
   }
-  .feedback-block{margin-top:28px;border-top:1px solid var(--paper-line);padding-top:20px;}
-  .feedback-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
-  .fb-label{font-size:0.88rem;color:var(--muted);flex:1;line-height:1.4;}
-  .fb-btn{border:1.5px solid var(--paper-line);background:var(--paper-soft);border-radius:6px;padding:10px 18px;cursor:pointer;font-size:1.5rem;line-height:1;transition:all .1s ease;}
-  .fb-btn:hover{border-color:var(--ink);transform:scale(1.08);}
-  .fb-btn.active{border-color:var(--green);background:#EAF1EC;}
-  .fb-btn.active-down{border-color:var(--red);background:#F8EFE8;}
+  .feedback-block{margin-top:28px;border-top:1px solid var(--paper-line);padding-top:22px;}
+  .fb-section{margin-bottom:20px;}
+  .fb-section-label{font-size:0.82rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .fb-pills{display:flex;gap:6px;flex-wrap:wrap;}
+  .fb-pill{
+    width:38px;height:38px;border-radius:50%;border:1.5px solid var(--paper-line);
+    background:var(--paper-soft);cursor:pointer;font-size:0.85rem;font-weight:700;
+    font-family:inherit;display:flex;align-items:center;justify-content:center;
+    transition:all .12s ease;color:var(--ink);
+  }
+  .fb-pill:hover{border-color:var(--ink);transform:scale(1.12);}
+  .fb-pill.sel{background:var(--red);border-color:var(--red);color:#fff;transform:scale(1.12);}
+  .fb-pill[data-v="8"].sel,.fb-pill[data-v="9"].sel,.fb-pill[data-v="10"].sel{background:var(--green);border-color:var(--green);}
+  .fb-hint{font-size:0.75rem;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between;}
+  .fb-textarea{
+    width:100%;box-sizing:border-box;border:1.5px solid var(--paper-line);background:var(--paper-soft);
+    border-radius:4px;padding:12px 14px;font-family:'Public Sans',sans-serif;font-size:0.9rem;
+    color:var(--ink);resize:vertical;min-height:80px;margin-top:4px;
+  }
+  .fb-textarea:focus{border-color:var(--red);outline:none;}
+  .fb-submit{margin-top:14px;}
   .ledger-toggle{margin-top:26px;background:none;border:none;color:var(--muted);font-size:0.82rem;cursor:pointer;text-decoration:underline;padding:0;}
   .ledger-table{width:100%;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:0.78rem;border-collapse:collapse;}
   .ledger-table th,.ledger-table td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--paper-line);}
@@ -442,7 +456,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.5.0
+    &nbsp;·&nbsp; v1.5.1
   </div>
 </div>
 
@@ -1503,11 +1517,10 @@ async function saveRun(){
   } catch(e){ console.error("saveRun:", e); return null; }
 }
 
-async function saveFeedbackToDb(field, value){
+async function saveFeedbackToDb(fields){
   if (!sbClient || !currentRunId || !currentUser) return;
   try {
-    const row = { run_id: currentRunId, user_id: currentUser.id };
-    row[field] = value === "up" ? 1 : -1;
+    const row = Object.assign({ run_id: currentRunId, user_id: currentUser.id }, fields);
     await sbClient.from("feedback").upsert(row, { onConflict: "run_id,user_id" });
   } catch(e){ console.error("saveFeedback:", e); }
 }
@@ -1532,8 +1545,10 @@ function freshState(){
     stagePlan:null,
     finalResult:null,
     usageEvents:[],
-    feedback:null,
-    resultsFeedback:null,
+    promptRating:null,
+    resultsRating:null,
+    feedbackComment:"",
+    feedbackSent:false,
     error:null,
     startError:null,
     gateReason:null,
@@ -2265,18 +2280,33 @@ function renderResult(){
     (currentUser
       ? '<p class="cost-line">Saved to your account &middot; ' + esc(currentUser.email) + '</p>'
       : '<p class="cost-line"><button class="link-btn" style="color:var(--muted);" data-action="open-login">Sign in to save your prompts across sessions</button></p>') +
-    '<div class="feedback-block">' +
-      '<div class="feedback-row">' +
-        '<span class="fb-label">Was the prompt well-written?</span>' +
-        '<button class="fb-btn' + (state.feedback === "up" ? " active" : state.feedback === "down" ? " active-down" : "") + '" id="fb-prompt-up" data-action="feedback-prompt" data-value="up">👍</button>' +
-        '<button class="fb-btn' + (state.feedback === "down" ? " active-down" : state.feedback === "up" ? " active" : "") + '" id="fb-prompt-down" data-action="feedback-prompt" data-value="down">👎</button>' +
-      '</div>' +
-      '<div class="feedback-row">' +
-        '<span class="fb-label">Did it get you good results when you used it?</span>' +
-        '<button class="fb-btn' + (state.resultsFeedback === "up" ? " active" : "") + '" id="fb-results-up" data-action="feedback-results" data-value="up">👍</button>' +
-        '<button class="fb-btn' + (state.resultsFeedback === "down" ? " active-down" : "") + '" id="fb-results-down" data-action="feedback-results" data-value="down">👎</button>' +
-      '</div>' +
-    '</div>' +
+    (state.feedbackSent
+      ? '<div class="feedback-block"><p style="color:var(--green);font-size:0.9rem;margin:0;">Thanks for the feedback — it helps us improve.</p></div>'
+      : '<div class="feedback-block">' +
+          '<div class="fb-section">' +
+            '<div class="fb-section-label">Prompt quality</div>' +
+            '<div class="fb-pills">' +
+              [1,2,3,4,5,6,7,8,9,10].map(n =>
+                '<button class="fb-pill' + (state.promptRating === n ? ' sel' : '') + '" data-action="rating-prompt" data-group="prompt" data-v="' + n + '">' + n + '</button>'
+              ).join("") +
+            '</div>' +
+            '<div class="fb-hint"><span>Needs work</span><span>Perfect</span></div>' +
+          '</div>' +
+          '<div class="fb-section">' +
+            '<div class="fb-section-label">Results quality</div>' +
+            '<div class="fb-pills">' +
+              [1,2,3,4,5,6,7,8,9,10].map(n =>
+                '<button class="fb-pill' + (state.resultsRating === n ? ' sel' : '') + '" data-action="rating-results" data-group="results" data-v="' + n + '">' + n + '</button>'
+              ).join("") +
+            '</div>' +
+            '<div class="fb-hint"><span>Didn\'t help</span><span>Nailed it</span></div>' +
+          '</div>' +
+          '<div class="fb-section">' +
+            '<div class="fb-section-label">Tell us more <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></div>' +
+            '<textarea id="fb-comment" class="fb-textarea" placeholder="What worked, what didn\'t, anything we should know…">' + esc(state.feedbackComment) + '</textarea>' +
+          '</div>' +
+          '<div class="fb-submit"><button class="btn btn-primary" data-action="submit-feedback">Send feedback</button></div>' +
+        '</div>') +
     '<button class="ledger-toggle" data-action="toggle-ledger">' + (state.ledgerOpen?"Hide":"Show") + ' what happened behind the scenes</button>' +
     (state.ledgerOpen ? renderLedger() : '') +
     '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>';
@@ -2484,22 +2514,29 @@ function copyAllPrompts(){
   copyTextToClipboard(joined).then(() => flashCopied(btn)).catch(() => flashCopyFailed(btn));
 }
 
-function setPromptFeedback(value){
-  state.feedback = value;
-  const up   = document.getElementById("fb-prompt-up");
-  const down = document.getElementById("fb-prompt-down");
-  if (up)   up.className   = "fb-btn" + (value === "up"   ? " active"      : "");
-  if (down) down.className = "fb-btn" + (value === "down" ? " active-down" : "");
-  saveFeedbackToDb("rating", value);
+function setPromptRating(v){
+  state.promptRating = v;
+  document.querySelectorAll(".fb-pill[data-group='prompt']").forEach(p => {
+    p.classList.toggle("sel", p.dataset.v === String(v));
+  });
+  saveFeedbackToDb({ rating: v });
 }
 
-function setResultsFeedback(value){
-  state.resultsFeedback = value;
-  const up   = document.getElementById("fb-results-up");
-  const down = document.getElementById("fb-results-down");
-  if (up)   up.className   = "fb-btn" + (value === "up"   ? " active"      : "");
-  if (down) down.className = "fb-btn" + (value === "down" ? " active-down" : "");
-  saveFeedbackToDb("results_rating", value);
+function setResultsRating(v){
+  state.resultsRating = v;
+  document.querySelectorAll(".fb-pill[data-group='results']").forEach(p => {
+    p.classList.toggle("sel", p.dataset.v === String(v));
+  });
+  saveFeedbackToDb({ results_rating: v });
+}
+
+async function submitFeedback(){
+  const ta = document.getElementById("fb-comment");
+  const comment = ta ? ta.value.trim() : state.feedbackComment;
+  state.feedbackComment = comment;
+  await saveFeedbackToDb({ rating: state.promptRating, results_rating: state.resultsRating, comment });
+  state.feedbackSent = true;
+  renderAll();
 }
 
 /* =====================================================================
@@ -2512,6 +2549,7 @@ function setResultsFeedback(value){
 document.getElementById("app").addEventListener("input", function(e){
   if (e.target.id === "request-input") state.originalRequest = e.target.value;
   else if (e.target.id === "free-text-input") state.freeTextDraft = e.target.value;
+  else if (e.target.id === "fb-comment") state.feedbackComment = e.target.value;
 });
 
 document.getElementById("app").addEventListener("click", function(e){
@@ -2567,8 +2605,9 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
-    case "feedback-prompt":  setPromptFeedback(el.dataset.value);  break;
-    case "feedback-results": setResultsFeedback(el.dataset.value); break;
+    case "rating-prompt":  setPromptRating(parseInt(el.dataset.v, 10));  break;
+    case "rating-results": setResultsRating(parseInt(el.dataset.v, 10)); break;
+    case "submit-feedback": submitFeedback(); break;
     case "toggle-ledger": state.ledgerOpen = !state.ledgerOpen; renderAll(); break;
     case "toggle-decisions": state.decisionsOpen = !state.decisionsOpen; renderAll(); break;
   }
