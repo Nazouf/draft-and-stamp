@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft &amp; Stamp — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1F2430;
+    --paper:#ECE6D6;
+    --paper-soft:#F4EFE2;
+    --paper-line:#D9CFB8;
+    --red:#B23A2E;
+    --green:#3F6E55;
+    --amber:#A6760B;
+    --muted:#6B6B63;
+    --surface:#252B3B;
+    --surface2:#2E3547;
+    --border:#3A4055;
+    --text:#EFEAD9;
+    --text-dim:#9BA3B8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100vh;}
+  body{background:var(--ink);color:var(--text);font-family:'Public Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  :focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+
+  /* ── layout ── */
+  .topbar{
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:14px clamp(16px,4vw,40px);display:flex;align-items:center;
+    justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .mark{width:20px;height:20px;border-radius:50%;border:2px double #D9785C;flex:0 0 auto;}
+  .wordmark{font-family:'Fraunces',serif;font-weight:600;font-size:1.05rem;color:var(--text);}
+  .admin-badge{
+    font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:uppercase;
+    letter-spacing:0.08em;color:var(--red);border:1px solid var(--red);
+    padding:3px 8px;border-radius:20px;
+  }
+  .topbar-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .user-chip{font-size:0.82rem;color:var(--text-dim);}
+  .link-btn{background:none;border:none;color:var(--text-dim);font-size:0.82rem;text-decoration:underline;padding:4px 0;}
+  .link-btn:hover{color:var(--text);}
+
+  .content{max-width:1100px;margin:0 auto;padding:clamp(20px,4vw,40px) clamp(16px,4vw,40px);}
+
+  /* ── states ── */
+  #loading-msg,#error-msg,#not-admin-msg{
+    text-align:center;padding:80px 20px;color:var(--text-dim);font-size:1rem;
+  }
+  #error-msg{color:#E07070;}
+
+  /* ── stats grid ── */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-bottom:32px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 20px;}
+  .stat-value{font-family:'Fraunces',serif;font-size:2rem;font-weight:700;color:var(--text);line-height:1;}
+  .stat-label{font-size:0.78rem;color:var(--text-dim);margin-top:6px;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;}
+
+  /* ── unrestricted toggle ── */
+  .toggle-section{
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    padding:24px 28px;margin-bottom:32px;display:flex;align-items:center;
+    justify-content:space-between;gap:20px;flex-wrap:wrap;
+  }
+  .toggle-info{}
+  .toggle-title{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:700;margin-bottom:4px;}
+  .toggle-sub{font-size:0.88rem;color:var(--text-dim);line-height:1.5;max-width:520px;}
+  .toggle-switch{display:flex;align-items:center;gap:14px;flex-shrink:0;}
+  .toggle-label{font-size:0.9rem;color:var(--text-dim);}
+  .switch{position:relative;display:inline-block;width:56px;height:30px;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider-track{
+    position:absolute;inset:0;background:#3A4055;border-radius:30px;
+    transition:background .2s ease;
+  }
+  .slider-track::before{
+    content:'';position:absolute;width:22px;height:22px;left:4px;bottom:4px;
+    background:#9BA3B8;border-radius:50%;transition:transform .2s ease, background .2s ease;
+  }
+  input:checked + .slider-track{background:#3F6E55;}
+  input:checked + .slider-track::before{transform:translateX(26px);background:#fff;}
+  .toggle-status{
+    font-family:'IBM Plex Mono',monospace;font-size:0.82rem;font-weight:500;
+    padding:4px 10px;border-radius:20px;
+  }
+  .status-on{background:#1E3328;color:#6DBF8C;border:1px solid #3F6E55;}
+  .status-off{background:#2D1A1A;color:#D07070;border:1px solid #8B3A3A;}
+
+  /* ── breakdowns ── */
+  .breakdowns{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;}
+  @media(max-width:600px){.breakdowns{grid-template-columns:1fr;}}
+  .breakdown-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px 20px;}
+  .breakdown-title{font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);margin-bottom:12px;}
+  .breakdown-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.88rem;}
+  .breakdown-row:last-child{border-bottom:none;}
+  .breakdown-key{color:var(--text);text-transform:capitalize;}
+  .breakdown-val{font-family:'IBM Plex Mono',monospace;color:var(--text-dim);}
+
+  /* ── tabs ── */
+  .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-btn{
+    background:none;border:none;color:var(--text-dim);font-size:0.9rem;
+    padding:10px 20px;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .12s;
+  }
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{color:var(--text);border-bottom-color:var(--red);}
+
+  /* ── tables ── */
+  .data-table{width:100%;border-collapse:collapse;font-size:0.86rem;}
+  .data-table th{text-align:left;padding:8px 12px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);border-bottom:1px solid var(--border);}
+  .data-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text);}
+  .data-table tr:last-child td{border-bottom:none;}
+  .data-table tr:hover td{background:var(--surface2);}
+  .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;display:block;}
+  .mono{font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--text-dim);}
+  .badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;padding:2px 8px;border-radius:20px;letter-spacing:0.04em;}
+  .badge-up{background:#1E3328;color:#6DBF8C;border:1px solid #3F6E55;}
+  .badge-down{background:#2D1A1A;color:#D07070;border:1px solid #8B3A3A;}
+  .badge-admin{background:#1A1D30;color:#8B9FE8;border:1px solid #4A5A9A;}
+  .badge-cat{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);}
+
+  /* ── expand row ── */
+  .expand-btn{background:none;border:none;color:var(--text-dim);font-size:0.78rem;text-decoration:underline;padding:0;}
+  .expand-btn:hover{color:var(--text);}
+  .expand-row td{background:var(--surface2);padding:14px 16px;}
+  .expand-content{font-size:0.82rem;line-height:1.6;color:var(--text-dim);}
+  .expand-content strong{color:var(--text);}
+
+  /* ── pagination ── */
+  .pagination{display:flex;align-items:center;gap:12px;margin-top:18px;font-size:0.85rem;color:var(--text-dim);}
+  .page-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:4px;font-size:0.85rem;}
+  .page-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .page-btn:not(:disabled):hover{border-color:var(--text-dim);}
+
+  /* ── run detail modal ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,24,35,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;width:100%;max-width:680px;max-height:85vh;overflow-y:auto;padding:28px;}
+  .modal-close{float:right;background:none;border:none;font-size:1.3rem;color:var(--text-dim);line-height:1;padding:0;}
+  .modal-close:hover{color:var(--text);}
+  .modal-title{font-family:'Fraunces',serif;font-size:1.2rem;font-weight:700;margin:0 0 16px;}
+  .detail-section{margin-bottom:16px;}
+  .detail-label{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);margin-bottom:4px;}
+  .detail-value{font-size:0.9rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+  .detail-block{background:var(--ink);border-radius:4px;padding:14px;font-size:0.82rem;font-family:'IBM Plex Mono',monospace;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:#EFEAD9;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark"></span>
+    <span class="wordmark">Draft &amp; Stamp</span>
+    <span class="admin-badge">Admin</span>
+  </div>
+  <div class="topbar-right">
+    <span class="user-chip" id="user-chip"></span>
+    <a class="link-btn" href="/">← Back to app</a>
+    <button class="link-btn" id="sign-out-btn">Sign out</button>
+  </div>
+</div>
+
+<div class="content">
+  <div id="loading-msg">Loading…</div>
+  <div id="error-msg" style="display:none;"></div>
+  <div id="not-admin-msg" style="display:none;">
+    <p style="font-size:1.2rem;">Not authorized.</p>
+    <p>This page is only accessible to admin accounts. <a href="/" style="color:var(--text);text-decoration:underline;">Go back to the app.</a></p>
+  </div>
+  <div id="dashboard" style="display:none;">
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <!-- Unrestricted mode toggle -->
+    <div class="toggle-section">
+      <div class="toggle-info">
+        <div class="toggle-title">Unrestricted Mode</div>
+        <div class="toggle-sub">When ON, everyone can use the app without any limits — no sign-in required, no run caps. Use this during your beta to collect feedback freely. Flip it OFF when you're ready to enforce limits (20 runs/month per account).</div>
+      </div>
+      <div class="toggle-switch">
+        <span class="toggle-label" id="toggle-label-text"></span>
+        <label class="switch">
+          <input type="checkbox" id="unrestricted-toggle">
+          <span class="slider-track"></span>
+        </label>
+        <span class="toggle-status" id="toggle-status"></span>
+      </div>
+    </div>
+
+    <!-- Breakdowns -->
+    <div class="breakdowns">
+      <div class="breakdown-card">
+        <div class="breakdown-title">By category</div>
+        <div id="category-breakdown"></div>
+      </div>
+      <div class="breakdown-card">
+        <div class="breakdown-title">By destination AI</div>
+        <div id="dest-breakdown"></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="runs">Runs</button>
+      <button class="tab-btn" data-tab="users">Users</button>
+      <button class="tab-btn" data-tab="feedback">Feedback</button>
+    </div>
+
+    <div id="tab-runs"><div id="runs-content"></div></div>
+    <div id="tab-users" style="display:none;"><div id="users-content"></div></div>
+    <div id="tab-feedback" style="display:none;"><div id="feedback-content"></div></div>
+
+  </div>
+</div>
+
+<!-- Run detail modal -->
+<div class="modal-overlay" id="run-modal" style="display:none;">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-close-btn">&#x2715;</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+let sbClient = null;
+let currentUser = null;
+let accessToken = null;
+let statsData = null;
+let currentTab = "runs";
+let runsPage = 0, usersPage = 0, feedbackPage = 0;
+
+async function adminFetch(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken, ...(opts.headers || {}) }
+  });
+  return res;
+}
+
+async function init() {
+  let cfg = {};
+  try { cfg = await fetch("/api/config").then(r => r.json()); } catch(e) {}
+
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    showError("Supabase is not configured on this server. Add SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY to your .env / Render env vars.");
+    return;
+  }
+
+  sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  const { data: { session } } = await sbClient.auth.getSession();
+
+  if (!session) {
+    showError('You need to sign in first. <a href="/" style="color:#D07070;text-decoration:underline;">Go to the app and sign in</a>, then come back here.');
+    return;
+  }
+
+  currentUser = session.user;
+  accessToken = session.access_token;
+  document.getElementById("user-chip").textContent = currentUser.email;
+  document.getElementById("sign-out-btn").onclick = async () => {
+    await sbClient.auth.signOut();
+    window.location.href = "/";
+  };
+
+  // Test admin access
+  const testRes = await adminFetch("/api/admin/stats");
+  if (testRes.status === 403) { showNotAdmin(); return; }
+  if (!testRes.ok) { showError("Failed to load admin data: " + (await testRes.json()).error); return; }
+
+  statsData = await testRes.json();
+  document.getElementById("loading-msg").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+
+  renderStats();
+  renderToggle();
+  renderBreakdowns();
+  loadRuns();
+  setupTabs();
+}
+
+function showError(msg) {
+  document.getElementById("loading-msg").style.display = "none";
+  const el = document.getElementById("error-msg");
+  el.innerHTML = msg;
+  el.style.display = "block";
+}
+function showNotAdmin() {
+  document.getElementById("loading-msg").style.display = "none";
+  document.getElementById("not-admin-msg").style.display = "block";
+}
+
+function renderStats() {
+  const s = statsData;
+  const total = s.thumbsUp + s.thumbsDown;
+  const pct = total ? Math.round(s.thumbsUp / total * 100) : null;
+  document.getElementById("stats-grid").innerHTML = [
+    { value: s.totalRuns, label: "Total runs" },
+    { value: s.runsToday, label: "Runs today" },
+    { value: s.activeUsers7d, label: "Active users (7d)" },
+    { value: s.thumbsUp, label: "👍 Positive feedback" },
+    { value: s.thumbsDown, label: "👎 Negative feedback" },
+    { value: pct !== null ? pct + "%" : "—", label: "Satisfaction rate" },
+  ].map(c =>
+    `<div class="stat-card"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`
+  ).join("");
+}
+
+function renderToggle() {
+  const on = statsData.unrestrictedMode;
+  const toggle = document.getElementById("unrestricted-toggle");
+  const status = document.getElementById("toggle-status");
+  const label = document.getElementById("toggle-label-text");
+  toggle.checked = on;
+  status.textContent = on ? "ON" : "OFF";
+  status.className = "toggle-status " + (on ? "status-on" : "status-off");
+  label.textContent = on ? "Limits disabled" : "Limits enforced";
+
+  toggle.onchange = async () => {
+    const newVal = toggle.checked;
+    toggle.disabled = true;
+    const res = await adminFetch("/api/admin/settings", {
+      method: "POST",
+      body: JSON.stringify({ key: "unrestricted_mode", value: String(newVal) })
+    });
+    toggle.disabled = false;
+    if (res.ok) {
+      statsData.unrestrictedMode = newVal;
+      renderToggle();
+    } else {
+      toggle.checked = !newVal;
+      alert("Failed to update setting.");
+    }
+  };
+}
+
+function renderBreakdowns() {
+  function renderBreakdown(counts, containerId) {
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const total = sorted.reduce((s, [,v]) => s + v, 0);
+    const el = document.getElementById(containerId);
+    if (!sorted.length) { el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;">No data yet</div>'; return; }
+    el.innerHTML = sorted.map(([k, v]) =>
+      `<div class="breakdown-row"><span class="breakdown-key">${k.replace(/_/g," ")}</span><span class="breakdown-val">${v} <span style="font-size:0.7em;opacity:.6;">${Math.round(v/total*100)}%</span></span></div>`
+    ).join("");
+  }
+  renderBreakdown(statsData.categoryCounts, "category-breakdown");
+  renderBreakdown(statsData.destCounts, "dest-breakdown");
+}
+
+function setupTabs() {
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.onclick = () => {
+      currentTab = btn.dataset.tab;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("tab-runs").style.display = currentTab === "runs" ? "" : "none";
+      document.getElementById("tab-users").style.display = currentTab === "users" ? "" : "none";
+      document.getElementById("tab-feedback").style.display = currentTab === "feedback" ? "" : "none";
+      if (currentTab === "runs") loadRuns();
+      if (currentTab === "users") loadUsers();
+      if (currentTab === "feedback") loadFeedback();
+    };
+  });
+}
+
+// ── Runs tab ──────────────────────────────────────────────────────────────────
+async function loadRuns() {
+  const el = document.getElementById("runs-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch(`/api/admin/runs?page=${runsPage}`);
+  const { runs, total } = await res.json();
+  if (!runs.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">No runs yet.</div>'; return; }
+
+  let html = `<table class="data-table"><thead><tr>
+    <th>Time</th><th>Request</th><th>Destination</th><th>Category</th><th>Mode</th><th></th>
+  </tr></thead><tbody>`;
+  runs.forEach(r => {
+    html += `<tr>
+      <td class="mono">${new Date(r.created_at).toLocaleString()}</td>
+      <td><span class="truncate" style="max-width:260px;">${esc(r.request)}</span></td>
+      <td>${esc(r.destination || "—")}</td>
+      <td><span class="badge badge-cat">${esc(r.category || "—")}</span></td>
+      <td class="mono">${esc(r.mode || "—")}</td>
+      <td><button class="expand-btn" onclick="openRunModal('${r.id}')">View</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  html += renderPagination(total, runsPage, 20, (p) => { runsPage = p; loadRuns(); });
+  el.innerHTML = html;
+}
+
+async function openRunModal(id) {
+  document.getElementById("run-modal").style.display = "flex";
+  document.getElementById("modal-content").innerHTML = '<div style="color:var(--text-dim);">Loading…</div>';
+  const res = await adminFetch(`/api/admin/runs/${id}`);
+  const r = await res.json();
+  const qa = (r.qa_pairs || []).map(q => `Q: ${q.text}\nA: ${q.answer}`).join("\n\n");
+  const prompts = (r.generated_prompts || []).map((p, i) => `[${p.label}]\n${p.content}`).join("\n\n---\n\n");
+  document.getElementById("modal-content").innerHTML = `
+    <h3 class="modal-title">Run detail</h3>
+    <div class="detail-section"><div class="detail-label">Request</div><div class="detail-value">${esc(r.request)}</div></div>
+    <div class="detail-section"><div class="detail-label">Destination · Category · Complexity · Stakes</div>
+      <div class="detail-value">${esc(r.destination)} · ${esc(r.category||"—")} · ${esc(r.complexity||"—")} · ${esc(r.stakes||"—")}</div></div>
+    <div class="detail-section"><div class="detail-label">Time</div><div class="detail-value mono">${new Date(r.created_at).toLocaleString()}</div></div>
+    ${qa ? `<div class="detail-section"><div class="detail-label">Interview Q&amp;A</div><div class="detail-block">${esc(qa)}</div></div>` : ""}
+    ${prompts ? `<div class="detail-section"><div class="detail-label">Generated prompts</div><div class="detail-block">${esc(prompts)}</div></div>` : ""}
+  `;
+  document.getElementById("modal-close-btn").onclick = () => { document.getElementById("run-modal").style.display = "none"; };
+}
+
+document.getElementById("run-modal").addEventListener("click", function(e) {
+  if (e.target === this) this.style.display = "none";
+});
+
+// ── Users tab ─────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const el = document.getElementById("users-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch(`/api/admin/users?page=${usersPage}`);
+  const { users, total } = await res.json();
+  if (!users.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">No users yet.</div>'; return; }
+
+  let html = `<table class="data-table"><thead><tr>
+    <th>Email</th><th>Runs</th><th>Signed up</th><th>Role</th>
+  </tr></thead><tbody>`;
+  users.forEach(u => {
+    html += `<tr>
+      <td>${esc(u.email || "—")}</td>
+      <td class="mono">${u.runCount}</td>
+      <td class="mono">${new Date(u.created_at).toLocaleDateString()}</td>
+      <td>${u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span style="color:var(--text-dim);font-size:0.82rem;">User</span>'}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  html += renderPagination(total, usersPage, 20, (p) => { usersPage = p; loadUsers(); });
+  el.innerHTML = html;
+}
+
+// ── Feedback tab ──────────────────────────────────────────────────────────────
+async function loadFeedback() {
+  const el = document.getElementById("feedback-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch(`/api/admin/feedback?page=${feedbackPage}`);
+  const { feedback, total } = await res.json();
+  if (!feedback.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">No feedback yet.</div>'; return; }
+
+  let html = `<table class="data-table"><thead><tr>
+    <th>Rating</th><th>Comment</th><th>Run</th><th>Time</th>
+  </tr></thead><tbody>`;
+  feedback.forEach(f => {
+    html += `<tr>
+      <td>${f.rating === 1 ? '<span class="badge badge-up">👍 Up</span>' : '<span class="badge badge-down">👎 Down</span>'}</td>
+      <td>${f.comment ? esc(f.comment) : '<span style="color:var(--text-dim);">—</span>'}</td>
+      <td><button class="expand-btn" onclick="openRunModal('${f.run_id}')">View run</button></td>
+      <td class="mono">${new Date(f.created_at).toLocaleString()}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  html += renderPagination(total, feedbackPage, 20, (p) => { feedbackPage = p; loadFeedback(); });
+  el.innerHTML = html;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function renderPagination(total, page, limit, onPage) {
+  const totalPages = Math.ceil(total / limit);
+  if (totalPages <= 1) return "";
+  return `<div class="pagination">
+    <button class="page-btn" ${page === 0 ? "disabled" : ""} onclick="(${onPage.toString()})(${page - 1})">← Prev</button>
+    <span>Page ${page + 1} of ${totalPages} (${total} total)</span>
+    <button class="page-btn" ${page >= totalPages - 1 ? "disabled" : ""} onclick="(${onPage.toString()})(${page + 1})">Next →</button>
+  </div>`;
+}
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+init();
+</script>
+</body>
+</html>

@@ -367,6 +367,52 @@
     text-align:center;color:#C9C2AC;font-size:0.76rem;padding:18px 20px 28px;
   }
   .footer a{text-decoration:underline;}
+
+  /* ---------- auth modal ---------- */
+  .auth-overlay{
+    position:fixed;inset:0;background:rgba(20,24,35,0.88);
+    display:flex;align-items:center;justify-content:center;
+    z-index:1000;padding:20px;
+  }
+  .auth-modal{
+    background:var(--paper);width:100%;max-width:400px;
+    border-radius:6px;padding:clamp(24px,5vw,40px);
+    box-shadow:0 30px 60px -10px rgba(0,0,0,0.6);position:relative;
+  }
+  .auth-close{
+    position:absolute;top:14px;right:16px;background:none;border:none;
+    font-size:1.3rem;cursor:pointer;color:var(--muted);padding:4px 8px;line-height:1;
+  }
+  .auth-close:hover{color:var(--ink);}
+  .auth-title{font-family:'Fraunces',serif;font-weight:700;font-size:1.5rem;margin:0 0 8px;color:var(--ink);}
+  .auth-sub{color:var(--muted);font-size:0.9rem;margin:0 0 22px;line-height:1.5;}
+  .auth-google-btn{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+    border:1.5px solid var(--paper-line);background:var(--paper-soft);
+    border-radius:5px;padding:12px 16px;font-size:0.95rem;font-weight:600;
+    cursor:pointer;transition:all .12s ease;font-family:inherit;
+  }
+  .auth-google-btn:hover{border-color:var(--ink);background:#fff;}
+  .auth-divider{
+    display:flex;align-items:center;gap:12px;margin:18px 0;
+    color:var(--muted);font-size:0.82rem;
+  }
+  .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--paper-line);}
+  .auth-input{
+    width:100%;border:1.5px solid var(--paper-line);background:var(--paper-soft);
+    border-radius:4px;padding:12px 14px;font-family:'Public Sans',sans-serif;
+    font-size:0.95rem;color:var(--ink);margin-bottom:10px;display:block;
+  }
+  .auth-input:focus{border-color:var(--red);outline:none;}
+  .auth-msg{font-size:0.85rem;margin-bottom:10px;border-radius:4px;padding:8px 12px;}
+  .auth-error{color:var(--red);background:#F8EFE8;border:1px solid var(--red);}
+  .auth-success{color:var(--green);background:#EAF1EC;border:1px solid var(--green);}
+  .auth-toggle{
+    display:block;width:100%;background:none;border:none;
+    color:var(--muted);font-size:0.85rem;text-decoration:underline;
+    cursor:pointer;margin-top:14px;font-family:inherit;text-align:center;
+  }
+  .auth-toggle:hover{color:var(--ink);}
 </style>
 </head>
 <body>
@@ -382,11 +428,18 @@
     <div class="paper-card" id="app"></div>
   </div>
   <div class="footer">
-    Runs locally — calls the real Gemini API through this app's own server, which holds the key from your .env file. Your account/credits are simulated in this browser only.
-    &nbsp;·&nbsp; v1.2
+    Draft &amp; Stamp — prompts that actually work.
+    &nbsp;·&nbsp; <a href="/admin">Admin</a>
+    &nbsp;·&nbsp; v1.3
   </div>
 </div>
 
+<!-- Auth modal (shown/hidden by JS) -->
+<div id="auth-overlay" class="auth-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="auth-modal" id="auth-modal-box"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* =====================================================================
    DATA — lightweight inspiration only, not a script.
@@ -452,8 +505,7 @@ const STAGE_HINTS = {
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
 
-const TIER_LIMITS = { anonymous: 2, free: 8 };
-const FREE_PERIOD_DAYS = 30;
+// Usage limits are enforced server-side when unrestricted_mode is off.
 
 /* =====================================================================
    SYSTEM PROMPTS — adapted from system_prompts.md, with an explicit
@@ -1315,54 +1367,110 @@ For unstaged or single-stage tasks, "prompts" contains exactly one entry with
 </output_format>`;
 
 /* =====================================================================
-   ACCOUNT (simulates users / anon_sessions / usage_limits)
+   AUTH — Supabase authentication + run/feedback persistence
    ===================================================================== */
-let account = { tier:"anonymous", creditsUsedThisPeriod:0, periodStartedAt:new Date().toISOString() };
+let sbClient = null;
+let currentUser = null;
+let unrestrictedMode = true;
+let currentRunId = null;
+let authMode = "signin"; // "signin" | "signup"
+let authLoading = false;
+let authError = null;
+let authSuccess = null;
 
-async function loadAccount(){
-  try{
-    const raw = localStorage.getItem("draft_stamp_account");
-    if (raw){
-      const parsed = JSON.parse(raw);
-      account = Object.assign(account, parsed);
-      maybeResetPeriod();
-    }
-  } catch(e){ /* no saved account yet — defaults stand */ }
-  renderAll();
-}
-function maybeResetPeriod(){
-  if (account.tier === "free"){
-    const started = new Date(account.periodStartedAt).getTime();
-    if (Date.now() - started > FREE_PERIOD_DAYS*24*3600*1000){
-      account.creditsUsedThisPeriod = 0;
-      account.periodStartedAt = new Date().toISOString();
-    }
+async function initApp(){
+  let cfg = {};
+  try { cfg = await fetch("/api/config").then(r => r.json()); } catch(e){ /* offline / no server */ }
+  unrestrictedMode = cfg.unrestrictedMode !== false;
+
+  if (cfg.supabaseUrl && cfg.supabaseAnonKey){
+    sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+    const { data: { session } } = await sbClient.auth.getSession();
+    currentUser = session?.user || null;
+    sbClient.auth.onAuthStateChange((_event, session) => {
+      currentUser = session?.user || null;
+      renderAll();
+    });
   }
-}
-async function saveAccount(){
-  try{ localStorage.setItem("draft_stamp_account", JSON.stringify(account)); }
-  catch(e){ console.error("storage save failed", e); }
-}
-function tierLimit(){ return TIER_LIMITS[account.tier] || 0; }
-function remaining(){ return Math.max(0, tierLimit() - account.creditsUsedThisPeriod); }
-function daysUntilReset(){
-  if (account.tier !== "free") return null;
-  const started = new Date(account.periodStartedAt).getTime();
-  const days = FREE_PERIOD_DAYS - Math.floor((Date.now()-started)/(24*3600*1000));
-  return Math.max(0, days);
-}
-function upgradeToFree(){
-  account.tier = "free";
-  account.creditsUsedThisPeriod = 0;
-  account.periodStartedAt = new Date().toISOString();
-  saveAccount();
-}
-async function resetAccount(){
-  account = { tier:"anonymous", creditsUsedThisPeriod:0, periodStartedAt:new Date().toISOString() };
-  try{ localStorage.removeItem("draft_stamp_account"); }
-  catch(e){ /* nothing saved yet, fine */ }
-  state = freshState();
   renderAll();
+}
+
+function openLogin(){
+  authMode = "signin"; authError = null; authSuccess = null; authLoading = false;
+  document.getElementById("auth-overlay").style.display = "flex";
+  renderAuthModal();
+}
+function closeLogin(){
+  document.getElementById("auth-overlay").style.display = "none";
+}
+
+async function signInWithEmail(){
+  if (!sbClient || authLoading) return;
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value;
+  if (!email || !password){ authError = "Enter your email and password."; renderAuthModal(); return; }
+  authLoading = true; authError = null; renderAuthModal();
+  const { error } = await sbClient.auth.signInWithPassword({ email, password });
+  authLoading = false;
+  if (error){ authError = error.message; renderAuthModal(); }
+  else { closeLogin(); }
+}
+
+async function signUpWithEmail(){
+  if (!sbClient || authLoading) return;
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value;
+  if (!email || !password){ authError = "Enter your email and password."; renderAuthModal(); return; }
+  if (password.length < 6){ authError = "Password must be at least 6 characters."; renderAuthModal(); return; }
+  authLoading = true; authError = null; renderAuthModal();
+  const { error } = await sbClient.auth.signUp({ email, password });
+  authLoading = false;
+  if (error){ authError = error.message; renderAuthModal(); }
+  else { authSuccess = "Check your email to confirm your account, then sign in."; authMode = "signin"; renderAuthModal(); }
+}
+
+async function signInWithGoogle(){
+  if (!sbClient) return;
+  await sbClient.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+}
+
+async function signOut(){
+  if (!sbClient) return;
+  await sbClient.auth.signOut();
+}
+
+async function saveRun(){
+  if (!sbClient || !state.finalResult) return null;
+  const c = state.classification;
+  try{
+    const session = await sbClient.auth.getSession();
+    const token = session.data.session?.access_token;
+    const { data, error } = await sbClient.from("runs").insert({
+      user_id: currentUser?.id || null,
+      request: state.originalRequest,
+      destination: state.destination,
+      category: c?.primary_category || null,
+      complexity: c?.complexity || null,
+      stakes: c?.stakes || null,
+      output_format: c?.output_format || null,
+      mode: state.mode,
+      qa_pairs: state.qaHistory,
+      generated_prompts: state.finalResult.prompts
+    }).select("id").single();
+    if (error){ console.error("saveRun:", error.message); return null; }
+    return data?.id || null;
+  } catch(e){ console.error("saveRun:", e); return null; }
+}
+
+async function saveFeedbackToDb(rating){
+  if (!sbClient || !currentRunId) return;
+  try{
+    await sbClient.from("feedback").insert({
+      run_id: currentRunId,
+      user_id: currentUser?.id || null,
+      rating: rating === "up" ? 1 : -1
+    });
+  } catch(e){ console.error("saveFeedback:", e); }
 }
 
 /* =====================================================================
@@ -1416,9 +1524,14 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   if (enableThinking === false){
     genConfig.thinkingConfig = { thinkingBudget: 0 };
   }
+  const headers = { "Content-Type":"application/json" };
+  if (sbClient){
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (session?.access_token) headers["Authorization"] = "Bearer " + session.access_token;
+  }
   const response = await fetch("/api/gemini", {
     method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    headers,
     body: JSON.stringify({
       model: model || STRONG_MODEL,
       systemInstruction: { parts:[{ text: systemPrompt }] },
@@ -1681,11 +1794,10 @@ function handleStartClick(){
     return;
   }
   state.startError = null;
-  if (account.tier === "anonymous" && remaining() <= 0){
-    state.gateReason = "anon_out_of_uses"; state.screen = "gate"; renderAll(); return;
-  }
-  if (account.tier === "free" && remaining() <= 0){
-    state.gateReason = "free_out_of_uses"; state.screen = "gate"; renderAll(); return;
+  // When limits are active and user is not signed in, prompt them to sign in first.
+  if (!unrestrictedMode && !currentUser){
+    openLogin();
+    return;
   }
   runClassify();
 }
@@ -1708,9 +1820,6 @@ async function runClassify(){
 function proceedFromClassification(){
   clearTimeout(state._stampTimer);
   const c = state.classification;
-  if (account.tier === "anonymous" && c.complexity === "big"){
-    state.gateReason = "big_task"; state.screen = "gate"; renderAll(); return;
-  }
   if (c.stakes === "sensitive" && !state.considerationsDone){
     runConsiderations();
     return;
@@ -1854,7 +1963,7 @@ async function runGenerate(){
       }))
     };
     logUsage("generate", STRONG_MODEL, usage);
-    finalizeSession();
+    await finalizeSession();
     state.screen = "result";
     renderAll();
     startTypewriter();
@@ -1864,18 +1973,8 @@ async function runGenerate(){
   }
 }
 
-function finalizeSession(){
-  const c = state.classification;
-  let cost;
-  if (c.complexity === "small"){
-    cost = 1;
-  } else {
-    const n = (state.stagePlan && state.stagePlan.stages && state.stagePlan.stages.length) || 1;
-    cost = 2 + Math.min(Math.max(n,1),4);
-  }
-  state.sessionCost = cost;
-  account.creditsUsedThisPeriod += cost;
-  saveAccount();
+async function finalizeSession(){
+  currentRunId = await saveRun();
 }
 
 function retryLastStep(){
@@ -1917,17 +2016,18 @@ function esc(s){
 }
 
 function renderTopbar(){
-  const limit = tierLimit();
-  const left = remaining();
-  const tierLabel = account.tier === "anonymous" ? "Anonymous" : "Free account";
-  let detail = left + " / " + limit + " uses left";
-  if (account.tier === "free") detail += " · resets in " + daysUntilReset() + "d";
-  else detail += " · one-time";
-  document.getElementById("topbar-right").innerHTML =
-    '<span class="chip">' + esc(tierLabel) + '</span>' +
-    '<span class="chip">' + esc(detail) + '</span>' +
-    '<button class="link-btn" data-action="reset-account">Reset demo account</button>' +
-    '<button class="link-btn" data-action="start-over">Start over</button>';
+  let html = '';
+  if (unrestrictedMode){
+    html += '<span class="chip">Beta &middot; unlimited</span>';
+  }
+  if (currentUser){
+    html += '<span class="chip">' + esc(currentUser.email) + '</span>';
+    html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
+  } else {
+    html += '<button class="link-btn" data-action="open-login">Sign in</button>';
+  }
+  html += '<button class="link-btn" data-action="start-over">Start over</button>';
+  document.getElementById("topbar-right").innerHTML = html;
 }
 
 function destinationPills(){
@@ -1978,28 +2078,14 @@ function renderClassified(){
 }
 
 function renderGate(){
-  let title, body, showUpgrade;
-  if (state.gateReason === "big_task"){
-    title = "This one needs a bit more room.";
-    body = "Bigger requests — the kind worth multiple drafts — need a free account, since an anonymous visit only carries two uses and a bigger task starts at three.";
-    showUpgrade = true;
-  } else if (state.gateReason === "anon_out_of_uses"){
-    title = "You're out of free uses for now.";
-    body = "Anonymous visits get two one-time uses. A free account gives you eight more, refreshed every 30 days.";
-    showUpgrade = true;
-  } else {
-    title = "You're out of free uses for now.";
-    body = "Your free account resets in " + daysUntilReset() + " day(s).";
-    showUpgrade = false;
-  }
   return '' +
     '<div class="gate-icon">&#9863;</div>' +
-    '<h1 class="title" style="text-align:center;font-size:1.5rem;">' + esc(title) + '</h1>' +
-    '<p class="subtitle" style="text-align:center;">' + esc(body) + '</p>' +
-    (showUpgrade
-      ? '<div class="btn-row" style="justify-content:center;"><button class="btn btn-primary" data-action="upgrade">Set up free access (simulated)</button></div><p class="meta-caption" style="text-align:center;border-left:none;">This prototype doesn\'t create a real account — it only unlocks the demo\'s free tier in your browser.</p>'
-      : '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="back-to-start">Back to start</button></div>') +
-    '<div class="btn-row" style="justify-content:center;"><button class="custom-toggle" data-action="reset-account">Testing this prototype? Reset the simulated account</button></div>';
+    '<h1 class="title" style="text-align:center;font-size:1.5rem;">Sign in to continue</h1>' +
+    '<p class="subtitle" style="text-align:center;">Create a free account to keep using Draft &amp; Stamp.</p>' +
+    '<div class="btn-row" style="justify-content:center;">' +
+      '<button class="btn btn-primary" data-action="open-login">Sign in / Sign up</button>' +
+      '<button class="btn" data-action="back-to-start">Back</button>' +
+    '</div>';
 }
 
 function renderConsiderations(){
@@ -2137,7 +2223,9 @@ function renderResult(){
   }
 
   html += '' +
-    '<p class="cost-line">Used ' + state.sessionCost + ' credit' + (state.sessionCost===1?"":"s") + ' from your ' + (account.tier==="anonymous"?"anonymous":"free") + ' balance.</p>' +
+    (currentUser
+      ? '<p class="cost-line">Saved to your account &middot; ' + esc(currentUser.email) + '</p>'
+      : '<p class="cost-line"><button class="link-btn" style="color:var(--muted);" data-action="open-login">Sign in to save your prompts across sessions</button></p>') +
     '<div class="feedback-row">' +
       '<span style="font-size:0.88rem;color:var(--muted);">Was this prompt good?</span>' +
       '<button class="fb-btn" id="fb-up" data-action="feedback" data-value="up">👍</button>' +
@@ -2160,6 +2248,43 @@ function renderErrorBanner(){
   if (!state.error) return '';
   return '<div class="error-banner">Something went wrong during the ' + esc(state.error.step.replace(/_/g," ")) + ' step: ' + esc(state.error.message) +
     '<div class="btn-row"><button class="btn btn-primary" data-action="retry">Try again</button><button class="btn" data-action="start-over">Start over</button></div></div>';
+}
+
+function renderAuthModal(){
+  const box = document.getElementById("auth-modal-box");
+  if (!box) return;
+  const isSignUp = authMode === "signup";
+  box.innerHTML =
+    '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' +
+    '<h2 class="auth-title">' + (isSignUp ? "Create account" : "Sign in") + '</h2>' +
+    '<p class="auth-sub">Save your prompts and access them across devices.</p>' +
+    (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
+    (sbClient
+      ? '<button class="auth-google-btn" id="auth-google-btn">Continue with Google</button>' +
+        '<div class="auth-divider"><span>or email</span></div>' +
+        (authError ? '<div class="auth-msg auth-error">' + esc(authError) + '</div>' : '') +
+        '<input type="email" id="auth-email" class="auth-input" placeholder="Email">' +
+        '<input type="password" id="auth-password" class="auth-input" placeholder="Password (6+ characters)">' +
+        '<button class="btn btn-primary" id="auth-submit-btn" style="width:100%;" ' + (authLoading ? 'disabled' : '') + '>' +
+          (authLoading ? 'Please wait…' : (isSignUp ? 'Create account' : 'Sign in')) +
+        '</button>' +
+        '<button class="auth-toggle" id="auth-toggle-btn">' +
+          (isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up") +
+        '</button>'
+      : '<p style="color:var(--muted);font-size:0.9rem;">Authentication is not yet configured on this server.</p>');
+
+  document.getElementById("auth-close-btn").onclick = closeLogin;
+  if (sbClient){
+    document.getElementById("auth-google-btn").onclick = signInWithGoogle;
+    document.getElementById("auth-submit-btn").onclick = isSignUp ? signUpWithEmail : signInWithEmail;
+    document.getElementById("auth-toggle-btn").onclick = function(){
+      authMode = (authMode === "signin") ? "signup" : "signin";
+      authError = null; authSuccess = null;
+      renderAuthModal();
+    };
+    const pwField = document.getElementById("auth-password");
+    pwField.onkeydown = function(e){ if (e.key === "Enter") isSignUp ? signUpWithEmail() : signInWithEmail(); };
+  }
 }
 
 function renderAll(){
@@ -2284,6 +2409,7 @@ function setFeedback(value){
   const down = document.getElementById("fb-down");
   if (up) up.classList.toggle("active", value === "up");
   if (down) down.classList.toggle("active", value === "down");
+  saveFeedbackToDb(value);
 }
 
 /* =====================================================================
@@ -2339,12 +2465,8 @@ document.getElementById("app").addEventListener("click", function(e){
     case "retry": retryLastStep(); break;
     case "start-over": startOver(); break;
     case "back-to-start": backToStart(); break;
-    case "reset-account": resetAccount(); break;
-    case "upgrade":
-      upgradeToFree();
-      renderTopbar();
-      continueAfterUpgrade();
-      break;
+    case "open-login": openLogin(); break;
+    case "sign-out": signOut(); break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
     case "feedback": setFeedback(el.dataset.value); break;
@@ -2357,10 +2479,18 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   const el = e.target.closest("[data-action]");
   if (!el) return;
   if (el.dataset.action === "start-over") startOver();
-  else if (el.dataset.action === "reset-account") resetAccount();
+  else if (el.dataset.action === "open-login") openLogin();
+  else if (el.dataset.action === "sign-out") signOut();
 });
 
-loadAccount();
+document.getElementById("auth-overlay").addEventListener("click", function(e){
+  if (e.target === this) closeLogin();
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "Escape") closeLogin();
+});
+
+initApp();
 </script>
 </body>
 </html>

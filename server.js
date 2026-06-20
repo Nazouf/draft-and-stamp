@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -10,8 +11,16 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
+const MONTHLY_FREE_LIMIT = 20;
 
-// All keys are loaded from .env — add more by adding GEMINI_API_KEY_5, etc.
+// Supabase admin client — uses service role key, never exposed to the browser.
+const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  : null;
+
+// ─── Gemini key rotation ───────────────────────────────────────────────────────
 const API_KEYS = [
   process.env.GEMINI_API_KEY,
   process.env.GEMINI_API_KEY_2,
@@ -21,13 +30,9 @@ const API_KEYS = [
   process.env.GEMINI_API_KEY_6,
 ].filter(Boolean);
 
-// Tracks which key to try first on the next request. Advances forward
-// whenever a key returns a quota error, so the server naturally stays on
-// whatever key still has quota without retrying exhausted ones first.
 let keyIndex = 0;
 
 async function callWithRotation(model, body) {
-  // Try every key once, starting from keyIndex, before giving up.
   for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
     const idx = (keyIndex + attempt) % API_KEYS.length;
     const key = API_KEYS[idx];
@@ -46,39 +51,109 @@ async function callWithRotation(model, body) {
       (data.error && (data.error.code === 429 || (data.error.message || "").includes("quota")));
 
     if (isQuotaError) {
-      // Rotate index forward so next request skips this key immediately
       keyIndex = (idx + 1) % API_KEYS.length;
       continue;
     }
 
-    // Non-quota response (success or a real error) — return it
     keyIndex = idx;
     return { status: upstream.status, data };
   }
 
-  // Every key returned a quota error
   return {
     status: 429,
-    data: {
-      error: {
-        message: `All ${API_KEYS.length} API keys have reached their quota. Please try again later (limits reset daily).`
-      }
-    }
+    data: { error: { message: `All ${API_KEYS.length} API keys have reached their quota. Please try again later (limits reset daily).` } }
   };
 }
 
+// ─── Supabase helpers ──────────────────────────────────────────────────────────
+async function verifyUser(req) {
+  if (!supabaseAdmin) return null;
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) return null;
+  const { data, error } = await supabaseAdmin.auth.getUser(auth.slice(7));
+  if (error || !data.user) return null;
+  return data.user;
+}
+
+async function isAdminUser(userId) {
+  if (!supabaseAdmin || !userId) return false;
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .single();
+  return data?.is_admin === true;
+}
+
+async function getUnrestrictedMode() {
+  if (!supabaseAdmin) return true;
+  const { data } = await supabaseAdmin
+    .from("settings")
+    .select("value")
+    .eq("key", "unrestricted_mode")
+    .single();
+  return data?.value !== "false";
+}
+
+async function requireAdmin(req, res, next) {
+  const user = await verifyUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  const admin = await isAdminUser(user.id);
+  if (!admin) return res.status(403).json({ error: "Forbidden — not an admin account" });
+  req.adminUser = user;
+  next();
+}
+
+// ─── Admin page route ─────────────────────────────────────────────────────────
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// ─── Public config ─────────────────────────────────────────────────────────────
+// Returns the Supabase public keys (safe to expose) and current unrestricted mode.
+// The browser fetches this on startup to initialize the Supabase JS client.
+app.get("/api/config", async (req, res) => {
+  const unrestricted = await getUnrestrictedMode();
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || null,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null,
+    unrestrictedMode: unrestricted
+  });
+});
+
+// ─── Gemini proxy ──────────────────────────────────────────────────────────────
 app.post("/api/gemini", async (req, res) => {
   if (API_KEYS.length === 0) {
-    return res.status(500).json({
-      error: { message: "No API keys found. Add GEMINI_API_KEY to .env and restart." }
-    });
+    return res.status(500).json({ error: { message: "No API keys configured. Add GEMINI_API_KEY to .env and restart." } });
   }
+
+  // Enforce limits only when Supabase is connected and unrestricted mode is off.
+  if (supabaseAdmin) {
+    const unrestricted = await getUnrestrictedMode();
+    if (!unrestricted) {
+      const user = await verifyUser(req);
+      if (!user) {
+        return res.status(401).json({ error: { message: "Sign in to use Draft & Stamp." } });
+      }
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const { count } = await supabaseAdmin
+        .from("runs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", startOfMonth.toISOString());
+      if ((count || 0) >= MONTHLY_FREE_LIMIT) {
+        return res.status(429).json({
+          error: { message: `You've used all ${MONTHLY_FREE_LIMIT} free runs this month. Resets on the 1st.` }
+        });
+      }
+    }
+  }
+
   try {
     const { model: requestedModel, ...geminiBody } = req.body;
-    const model = (requestedModel && ALLOWED_MODELS.has(requestedModel))
-      ? requestedModel
-      : DEFAULT_MODEL;
-
+    const model = (requestedModel && ALLOWED_MODELS.has(requestedModel)) ? requestedModel : DEFAULT_MODEL;
     const { status, data } = await callWithRotation(model, geminiBody);
     res.status(status).json(data);
   } catch (err) {
@@ -86,8 +161,167 @@ app.post("/api/gemini", async (req, res) => {
   }
 });
 
+// ─── Admin: stats ──────────────────────────────────────────────────────────────
+app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+  try {
+    const [totalRuns, runsToday, thumbsUp, thumbsDown, unrestricted] = await Promise.all([
+      supabaseAdmin.from("runs").select("id", { count: "exact", head: true }),
+      supabaseAdmin.from("runs").select("id", { count: "exact", head: true })
+        .gte("created_at", new Date(Date.now() - 86400000).toISOString()),
+      supabaseAdmin.from("feedback").select("id", { count: "exact", head: true }).eq("rating", 1),
+      supabaseAdmin.from("feedback").select("id", { count: "exact", head: true }).eq("rating", -1),
+      getUnrestrictedMode()
+    ]);
+
+    const activeUsersRes = await supabaseAdmin
+      .from("runs")
+      .select("user_id")
+      .gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString())
+      .not("user_id", "is", null);
+
+    const uniqueUsers = new Set((activeUsersRes.data || []).map(r => r.user_id)).size;
+
+    const { data: allRuns } = await supabaseAdmin.from("runs").select("category, destination");
+    const categoryCounts = {};
+    const destCounts = {};
+    (allRuns || []).forEach(r => {
+      if (r.category) categoryCounts[r.category] = (categoryCounts[r.category] || 0) + 1;
+      if (r.destination) destCounts[r.destination] = (destCounts[r.destination] || 0) + 1;
+    });
+
+    res.json({
+      totalRuns: totalRuns.count || 0,
+      runsToday: runsToday.count || 0,
+      activeUsers7d: uniqueUsers,
+      thumbsUp: thumbsUp.count || 0,
+      thumbsDown: thumbsDown.count || 0,
+      categoryCounts,
+      destCounts,
+      unrestrictedMode: unrestricted
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: runs feed ──────────────────────────────────────────────────────────
+app.get("/api/admin/runs", requireAdmin, async (req, res) => {
+  const page = Math.max(0, parseInt(req.query.page || "0"));
+  const limit = 20;
+  try {
+    const { data, count, error } = await supabaseAdmin
+      .from("runs")
+      .select("id, created_at, request, destination, category, complexity, mode, user_id", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(page * limit, (page + 1) * limit - 1);
+    if (error) throw error;
+    res.json({ runs: data || [], total: count || 0, page, limit });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/runs/:id", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("runs")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: users ──────────────────────────────────────────────────────────────
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  const page = Math.max(0, parseInt(req.query.page || "0"));
+  const limit = 20;
+  try {
+    const { data: profiles, count } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, is_admin, created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(page * limit, (page + 1) * limit - 1);
+
+    const userIds = (profiles || []).map(p => p.id);
+    let countMap = {};
+    if (userIds.length) {
+      const { data: runRows } = await supabaseAdmin
+        .from("runs")
+        .select("user_id")
+        .in("user_id", userIds);
+      (runRows || []).forEach(r => { countMap[r.user_id] = (countMap[r.user_id] || 0) + 1; });
+    }
+
+    res.json({
+      users: (profiles || []).map(p => ({ ...p, runCount: countMap[p.id] || 0 })),
+      total: count || 0,
+      page,
+      limit
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: feedback feed ──────────────────────────────────────────────────────
+app.get("/api/admin/feedback", requireAdmin, async (req, res) => {
+  const page = Math.max(0, parseInt(req.query.page || "0"));
+  const limit = 20;
+  try {
+    const { data, count, error } = await supabaseAdmin
+      .from("feedback")
+      .select("id, created_at, rating, comment, run_id, user_id", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(page * limit, (page + 1) * limit - 1);
+    if (error) throw error;
+    res.json({ feedback: data || [], total: count || 0, page, limit });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: update settings ────────────────────────────────────────────────────
+app.post("/api/admin/settings", requireAdmin, async (req, res) => {
+  const { key, value } = req.body;
+  if (!key || value === undefined) return res.status(400).json({ error: "key and value required" });
+  try {
+    const { error } = await supabaseAdmin
+      .from("settings")
+      .upsert({ key, value: String(value), updated_at: new Date().toISOString() });
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: toggle user admin status ──────────────────────────────────────────
+app.post("/api/admin/users/:id/toggle-admin", requireAdmin, async (req, res) => {
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", req.params.id)
+      .single();
+    if (!profile) return res.status(404).json({ error: "User not found" });
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ is_admin: !profile.is_admin })
+      .eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ ok: true, is_admin: !profile.is_admin });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Draft & Stamp running at http://localhost:${PORT}`);
   console.log(`API keys loaded: ${API_KEYS.length} (rotation active)`);
+  console.log(`Supabase: ${supabaseAdmin ? "connected" : "not configured — running without auth/DB"}`);
 });
