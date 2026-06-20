@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft &amp; Stamp — prompt drafting prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1F2430;
+    --paper:#ECE6D6;
+    --paper-soft:#F4EFE2;
+    --paper-line:#D9CFB8;
+    --red:#B23A2E;
+    --green:#3F6E55;
+    --amber:#A6760B;
+    --muted:#6B6B63;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--ink);
+    font-family:'Public Sans',sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  button{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+
+  .shell{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---------- header ---------- */
+  .topbar{
+    background:var(--ink);
+    color:#EFEAD9;
+    padding:16px clamp(16px,4vw,40px);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    border-bottom:1px solid #34394A;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .mark{
+    width:22px;height:22px;border-radius:50%;
+    border:2px double #D9785C;
+    flex:0 0 auto;
+  }
+  .wordmark{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:1.15rem;
+    letter-spacing:0.01em;
+  }
+  .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    border:1px solid #4A5066;
+    color:#C9C2AC;
+    padding:5px 10px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .link-btn{
+    background:none;border:none;color:#C9C2AC;
+    font-size:0.82rem;text-decoration:underline;
+    cursor:pointer;padding:4px 0;
+  }
+  .link-btn:hover{color:#EFEAD9;}
+
+  /* ---------- main ---------- */
+  .main{
+    flex:1;
+    display:flex;
+    justify-content:center;
+    padding:clamp(20px,5vw,56px) clamp(14px,4vw,40px) 40px;
+  }
+  .paper-card{
+    width:100%;
+    max-width:680px;
+    background:var(--paper);
+    background-image:repeating-linear-gradient(
+      to bottom, transparent, transparent 35px, rgba(217,207,184,0.55) 35px, rgba(217,207,184,0.55) 36px
+    );
+    border-radius:4px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.4) inset;
+    padding:clamp(24px,5vw,48px);
+    animation:fadeUp .45s ease both;
+  }
+  @keyframes fadeUp{
+    from{opacity:0;transform:translateY(10px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+
+  h1.title{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:clamp(1.7rem,4vw,2.3rem);
+    margin:0 0 6px;
+    color:var(--ink);
+  }
+  .subtitle{
+    color:var(--muted);
+    font-size:1.02rem;
+    margin:0 0 14px;
+    line-height:1.5;
+  }
+  .meta-caption{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.72rem;
+    color:var(--muted);
+    letter-spacing:0.03em;
+    margin:0 0 30px;
+    border-left:2px solid var(--paper-line);
+    padding-left:10px;
+  }
+
+  label.field-label{
+    display:block;
+    font-weight:600;
+    font-size:0.95rem;
+    margin:26px 0 10px;
+  }
+  textarea, .free-text-input{
+    width:100%;
+    border:1.5px solid var(--paper-line);
+    background:var(--paper-soft);
+    border-radius:4px;
+    padding:14px;
+    font-family:'Public Sans',sans-serif;
+    font-size:1rem;
+    color:var(--ink);
+    resize:vertical;
+    min-height:90px;
+  }
+  textarea:focus, .free-text-input:focus{border-color:var(--red);}
+
+  .apikey-panel{
+    border-radius:5px;padding:14px 16px;margin-bottom:22px;
+  }
+  .apikey-missing{background:#F8EFE8;border:1.5px dashed var(--red);}
+  .apikey-set{background:var(--paper-soft);border:1.5px solid var(--paper-line);}
+  .apikey-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .apikey-row input[type=password]{
+    flex:1;min-width:160px;border:1.5px solid var(--paper-line);background:#fff;
+    border-radius:4px;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:0.9rem;
+  }
+  .apikey-row input[type=password]:focus{border-color:var(--red);}
+  .apikey-row code{font-family:'IBM Plex Mono',monospace;background:var(--paper-line);padding:2px 6px;border-radius:3px;}
+
+  .pill-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .pill-btn{
+    border:1.5px solid var(--paper-line);
+    background:var(--paper-soft);
+    color:var(--ink);
+    border-radius:20px;
+    padding:8px 16px;
+    font-size:0.9rem;
+    cursor:pointer;
+    transition:all .12s ease;
+  }
+  .pill-btn:hover{border-color:var(--red);}
+  .pill-btn.selected{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--paper);
+  }
+
+  .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:520px){.mode-grid{grid-template-columns:1fr;}}
+  .mode-card{
+    text-align:left;
+    border:1.5px solid var(--paper-line);
+    background:var(--paper-soft);
+    border-radius:6px;
+    padding:14px 16px;
+    cursor:pointer;
+    transition:all .12s ease;
+  }
+  .mode-card:hover{border-color:var(--red);}
+  .mode-card.selected{border-color:var(--red);background:#F8EFE8;}
+  .mode-card .mc-title{font-weight:700;margin-bottom:3px;}
+  .mode-card .mc-sub{color:var(--muted);font-size:0.85rem;}
+
+  .btn{
+    font-weight:600;
+    padding:12px 22px;
+    border-radius:4px;
+    border:1.5px solid var(--ink);
+    background:transparent;
+    color:var(--ink);
+    cursor:pointer;
+    font-size:0.95rem;
+    transition:all .14s ease;
+  }
+  .btn:hover{background:var(--ink);color:var(--paper);}
+  .btn-primary{border-color:var(--red);color:var(--red);}
+  .btn-primary:hover{background:var(--red);color:#fff;}
+  .btn[disabled]{opacity:.4;cursor:not-allowed;}
+  .btn-row{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+
+  .error-banner{
+    margin-top:18px;border:1.5px solid var(--red);background:#F8EFE8;
+    color:var(--red);padding:12px 14px;border-radius:4px;font-size:0.9rem;
+  }
+  .start-error{color:var(--red);font-size:0.85rem;margin-top:8px;}
+
+  /* ---------- loading ---------- */
+  .loading-line{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.98rem;
+    color:var(--muted);
+  }
+  .cursor{display:inline-block;width:9px;animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+
+  /* ---------- stamp ---------- */
+  .stamp-wrap{text-align:center;padding:18px 0;}
+  .stamp{
+    display:inline-block;
+    border:3px double var(--red);
+    color:var(--red);
+    font-family:'IBM Plex Mono',monospace;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    font-weight:600;
+    font-size:0.85rem;
+    padding:12px 20px;
+    border-radius:2px;
+    transform:rotate(-3deg);
+    animation:stampIn .35s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  .stamp.green{border-color:var(--green);color:var(--green);}
+  .stamp.amber{border-color:var(--amber);color:var(--amber);}
+  @keyframes stampIn{
+    0%{opacity:0;transform:scale(1.8) rotate(-3deg);}
+    60%{opacity:1;transform:scale(0.92) rotate(-3deg);}
+    100%{opacity:1;transform:scale(1) rotate(-3deg);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .stamp,.paper-card{animation:none !important;}
+  }
+  .stamp-sub{
+    text-align:center;color:var(--muted);font-size:0.92rem;margin-top:14px;
+  }
+
+  /* ---------- interview ---------- */
+  .progress-note{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;
+    margin-bottom:8px;
+  }
+  .question-text{
+    font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;line-height:1.35;margin:0 0 6px;
+  }
+  .question-hint{color:var(--muted);font-size:0.85rem;font-style:italic;margin-bottom:18px;}
+  .option-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
+  .option-btn{
+    text-align:left;border:1.5px solid var(--paper-line);background:var(--paper-soft);
+    border-radius:5px;padding:13px 16px;cursor:pointer;transition:all .12s ease;
+  }
+  .option-btn:hover{border-color:var(--red);background:#F8EFE8;}
+  .option-label{font-weight:600;font-size:0.96rem;}
+  .option-example{display:block;color:var(--muted);font-size:0.84rem;font-style:italic;margin-top:3px;}
+  .check-row{display:flex;align-items:flex-start;gap:10px;padding:4px 0;cursor:pointer;}
+  .check-box{width:18px;height:18px;border:1.5px solid var(--paper-line);border-radius:3px;flex:0 0 auto;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--red);font-weight:700;}
+  .check-box.on{border-color:var(--red);background:#F8EFE8;}
+  .slider-row{margin:14px 0;}
+  .slider-labels{display:flex;justify-content:space-between;font-size:0.8rem;color:var(--muted);margin-bottom:6px;}
+  input[type=range]{width:100%;accent-color:var(--red);}
+  .custom-toggle{
+    margin-top:14px;background:none;border:none;color:var(--red);font-size:0.84rem;
+    cursor:pointer;text-decoration:underline;padding:0;display:block;
+  }
+
+  .decisions-toggle{
+    margin-top:26px;background:none;border:none;color:var(--muted);font-size:0.82rem;
+    cursor:pointer;text-decoration:underline;padding:0;
+  }
+  .decisions-log{margin-top:12px;max-height:220px;overflow-y:auto;}
+  .decision-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--paper-line);font-size:0.88rem;}
+  .decision-row:last-child{border-bottom:none;}
+  .decision-tick{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--green);color:var(--green);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700;margin-top:1px;}
+  .decision-q{color:var(--muted);}
+  .decision-a{font-weight:600;}
+
+  /* ---------- domain-considerations ---------- */
+  .topic-list{list-style:none;margin:18px 0 6px;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .topic-row{
+    display:flex;align-items:flex-start;gap:12px;cursor:pointer;
+    border:1.5px solid var(--paper-line);background:var(--paper-soft);border-radius:5px;padding:12px 14px;
+    transition:opacity .12s ease;
+  }
+  .topic-row .check-box{margin-top:2px;border-color:var(--amber);}
+  .topic-row .check-box.on{background:#F6EBD2;}
+  .topic-row.dismissed{opacity:0.5;}
+  .topic-row.dismissed .topic-label{text-decoration:line-through;}
+  .topic-label{font-weight:600;font-size:0.94rem;}
+  .topic-reason{color:var(--muted);font-size:0.84rem;margin-top:2px;}
+  .pending-topics{
+    font-size:0.8rem;color:var(--amber);background:#F6EBD2;border-radius:4px;
+    padding:7px 11px;margin-bottom:14px;border:1px solid var(--amber);
+  }
+
+  /* ---------- staging ---------- */
+  .stage-list{margin:18px 0 0;padding:0;list-style:none;}
+  .stage-item{display:flex;gap:14px;padding:12px 0;border-bottom:1px dashed var(--paper-line);}
+  .stage-item:last-child{border-bottom:none;}
+  .stage-num{font-family:'IBM Plex Mono',monospace;color:var(--red);font-weight:600;flex:0 0 auto;}
+  .stage-title{font-weight:700;margin-bottom:2px;}
+  .stage-purpose{color:var(--muted);font-size:0.88rem;}
+
+  /* ---------- result ---------- */
+  .note-panel{
+    border-radius:5px;padding:14px 16px;margin:16px 0;
+  }
+  .note-panel-title{font-weight:700;font-size:0.88rem;margin-bottom:8px;}
+  .note-list{margin:0;padding-left:20px;font-size:0.86rem;line-height:1.55;}
+  .note-list li{margin-bottom:4px;}
+  .note-assumptions{background:#F8EFE8;border:1.5px dashed var(--red);}
+  .note-assumptions .note-panel-title{color:var(--red);}
+  .note-stakes{background:#F6EBD2;border:1.5px solid var(--amber);}
+  .note-stakes .note-panel-title{color:var(--amber);}
+  .staged-order-note{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:0.8rem;
+    color:var(--ink);background:var(--paper-soft);border:1px solid var(--paper-line);
+    border-radius:4px;padding:9px 13px;margin:16px 0 0;
+  }
+  .prompt-cards{display:flex;flex-direction:column;gap:18px;margin-top:14px;}
+  .prompt-card{}
+  .prompt-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;}
+  .prompt-card-label{font-weight:700;font-size:0.98rem;}
+  .prompt-card-purpose{color:var(--muted);font-size:0.85rem;margin-top:2px;}
+  .btn-small{padding:6px 14px;font-size:0.82rem;flex:0 0 auto;}
+  .output-block{
+    background:var(--ink);color:#EFEAD9;border-radius:6px;
+    padding:20px;position:relative;
+  }
+  .output-text{
+    font-family:'IBM Plex Mono',monospace;font-size:0.86rem;line-height:1.6;
+    white-space:pre-wrap;word-break:break-word;margin:0;
+  }
+  .feedback-row{display:flex;align-items:center;gap:10px;margin-top:24px;}
+  .fb-btn{border:1.5px solid var(--paper-line);background:var(--paper-soft);border-radius:5px;padding:8px 12px;cursor:pointer;font-size:1rem;}
+  .fb-btn.active{border-color:var(--green);background:#EAF1EC;}
+  .ledger-toggle{margin-top:26px;background:none;border:none;color:var(--muted);font-size:0.82rem;cursor:pointer;text-decoration:underline;padding:0;}
+  .ledger-table{width:100%;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:0.78rem;border-collapse:collapse;}
+  .ledger-table th,.ledger-table td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--paper-line);}
+  .cost-line{font-family:'IBM Plex Mono',monospace;color:var(--muted);font-size:0.8rem;margin-top:6px;}
+
+  /* ---------- gate ---------- */
+  .gate-icon{font-size:2rem;text-align:center;margin-bottom:10px;}
+
+  .footer{
+    text-align:center;color:#C9C2AC;font-size:0.76rem;padding:18px 20px 28px;
+  }
+  .footer a{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark"></span>
+      <span class="wordmark">Draft &amp; Stamp</span>
+    </div>
+    <div class="topbar-right" id="topbar-right"></div>
+  </div>
+  <div class="main">
+    <div class="paper-card" id="app"></div>
+  </div>
+  <div class="footer">
+    Runs locally — calls the real Gemini API through this app's own server, which holds the key from your .env file. Your account/credits are simulated in this browser only.
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   DATA — lightweight inspiration only, not a script.
+   TOPIC_SEEDS: per-category things that are *often* worth probing — the
+   model treats these as a starting point, not a checklist to recite. It
+   writes its own question text, its own options, and is free to ask
+   about something not listed here if the request calls for it.
+   STAGE_HINTS: same idea for staging — a rough, informal shape of how a
+   category's output commonly breaks into parts, not a rigid menu with
+   trigger rules. The model decides what actually applies.
+   ===================================================================== */
+const TOPIC_SEEDS = {
+  writing: ["the real names of any people, companies, or titles involved — or whether to use placeholders",
+    "who will read it", "the feel or voice it should have", "how long it should be",
+    "whether it should end with a specific call to action", "facts or details that must be included",
+    "existing writing (yours or someone else's) to match the style of", "anything it should avoid saying"],
+  financial_model: [
+    "what the model is actually for — internal budget, investor pitch, equity valuation, M&A diligence, lender presentation, or personal planning",
+    "whether this is for a specific real company — if so, whether it is publicly listed, on which exchange, and the ticker symbol",
+    "the most recent fiscal year with complete, published financial data to anchor the model as the base year",
+    "how far ahead the forecast should look",
+    "the primary revenue drivers — and whether revenues are earned in local currency, foreign currency, or both (export/import exposure)",
+    "key cost drivers that move with external prices — raw materials, commodities (cotton, oil, steel, wheat), energy, freight",
+    "whether to use the company's own real published numbers or illustrative placeholder figures",
+    "big-picture summary vs. detailed line-by-line with explicit forecasting methodology per line",
+    "who will be reading and judging this — internal planning only, or external investors, a bank, a regulator, or an investment committee",
+    "what valuation approaches to include — DCF only, comparable company multiples (EV/EBITDA, P/E, P/B), dividend discount, or a combination",
+    "whether a current market price comparison is needed (for listed equity: intrinsic value only means something relative to the share price)",
+    "growth assumptions, risk factors, and whether best/base/worst-case scenario analysis is required",
+    "capital structure details — significant existing debt, recent equity raises, convertible instruments, or planned capex",
+    "the regulatory and accounting framework — which country, which reporting standard (IFRS, US GAAP, local GAAP), listed vs private requirements",
+  ],
+  code: ["language or tool, if they already have one in mind", "a concrete example input and the output they'd want back",
+    "whether this gets used once or relied on repeatedly", "messy edge cases it should handle without breaking",
+    "anything it needs to connect to or read from", "how much it needs to scale or handle at once"],
+  image: ["the main subject and composition", "art style or medium", "mood, lighting, or color palette",
+    "aspect ratio or where the image will be used", "specific things to avoid in the image",
+    "a reference image or artist/style to lean toward"],
+  research: ["how deep vs. broad the answer should be", "what they already know, so it doesn't over-explain basics",
+    "what it's actually for (a decision, learning, something they're writing)",
+    "whether specific sources or types of evidence matter", "any sub-questions that absolutely must be answered"],
+  presentation: ["who's in the room and the occasion", "roughly how many slides",
+    "the one thing the audience should walk away remembering", "how dense each slide should be",
+    "data, charts, or visuals that need to be included", "whether it'll be presented live or read on its own"],
+  other: ["what success looks like for this", "who it's actually for", "constraints or things to avoid",
+    "how much detail is wanted"]
+};
+
+const STAGE_HINTS = {
+  financial_model: "For equity/DCF models: Stage 1 = data foundation — base year actuals, sourcing approach, and all key assumptions (revenue drivers, FX rates, commodity prices, cost structure, WACC inputs) before any forecasting begins, so the person can validate assumptions first. Stage 2 = full financial statement build-out — forecasted income statement, balance sheet, and cash flow statement with explicit methodology per line item. Stage 3 = valuation — DCF (FCFF, WACC, terminal value) AND comparable company multiples to cross-check; intrinsic value vs current market price for listed equity. Stage 4 = scenario analysis and investor-ready output — best/base/worst cases, sensitivity tables, executive summary or narrative. CRITICAL rule: never combine DCF calculation and scenario analysis in the same stage — establish the base-case model cleanly first, then run sensitivities in a separate stage. For simpler internal budgets or forecasts without a valuation requirement: 1–2 stages is usually right. Collapse to one stage only if the task is genuinely a single analytical unit.",
+  writing: "Usually short enough to stay one stage. Only split it if there are genuinely distinct pieces to draft separately — for example a long piece with real sections, or a sequence like a teaser followed by the full piece.",
+  code: "Often breaks into: the core logic; then edge-case handling and validation; then polish, tests, or docs, but only if it's something that'll be reused rather than run once. Collapse to one stage for anything simple.",
+  presentation: "Often breaks into: overall structure/outline; then slide-by-slide content; then speaker notes or visual polish, but only if those were actually asked for.",
+  image: "Almost always a single stage — splitting an image prompt rarely helps.",
+  research: "Usually a single stage, unless the request genuinely spans multiple distinct sub-questions worth answering one at a time.",
+  other: "No fixed shape for this category — decide purely from what's genuinely separable in this specific request."
+};
+
+const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
+const STRONG_MODEL = "gemini-2.5-flash";      // generate only
+
+const TIER_LIMITS = { anonymous: 2, free: 8 };
+const FREE_PERIOD_DAYS = 30;
+
+/* =====================================================================
+   SYSTEM PROMPTS — adapted from system_prompts.md, with an explicit
+   JSON-only output contract added for steps 1–3 (no schema-enforced
+   tool call available here, so the contract has to live in the prompt).
+   ===================================================================== */
+const CLASSIFY_SYSTEM = `You are the classification step inside a prompt-engineering assistant. Your only
+job is to read a short, often vague request from a non-technical user and decide
+what kind of task this is, how big/consequential it is, and whether it touches
+anything that genuinely needs expert or regulatory scrutiny. You do not generate
+any prompts, questions, or advice — only this classification.
+
+<categories>
+- writing: blog posts, social media, emails, marketing copy, scripts, letters,
+  cover letters, general text of any kind
+- code: programs, scripts, automations, spreadsheet formulas, database queries,
+  anything meant to be executed or run
+- image: prompts for image-generation tools (Midjourney, DALL-E, Stable Diffusion, etc.)
+- research: requests for information, summaries, analysis, explanations,
+  competitive analysis, literature reviews, factual investigation
+- financial_model: budgets, forecasts, financial projections, equity valuations,
+  DCF analyses, investment analyses, business plans with numbers, ratio analyses,
+  scenario models, M&A diligence — anything involving structured financial numbers
+  over time or a valuation of a real or hypothetical business or asset
+- presentation: slide decks, pitch decks, investor presentations
+- other: anything that doesn't fit cleanly above
+</categories>
+
+<task>
+1. Pick the single best-fitting primary_category.
+2. If the request clearly blends two categories (e.g. "build a DCF and write an
+   investor memo summarizing it"), set secondary_category. Most requests have
+   one — only set a secondary when genuinely blended.
+3. Decide complexity:
+   - "big" if: involves multiple interconnected deliverables; requires real data
+     about a named company, person, or institution; has real stakes for an
+     external audience (investors, clients, regulators, banks, employers);
+     explicitly comprehensive ("full," "complete," "detailed," "from scratch");
+     involves a multi-year forecast, equity valuation, or DCF analysis; or would
+     take a professional several hours to do well.
+   - "small" otherwise. Judge by implication, not word count.
+4. Separately, decide stakes — NOT the same axis as complexity. Set to "sensitive" if:
+   - Regulated domain: securities/investment advice, lending/credit, healthcare,
+     legal, tax, insurance, employment/hiring, real estate appraisal
+   - Involves an equity valuation or investment recommendation for any real
+     company, especially one listed on a public exchange
+   - Makes decisions about or materially affecting real people (credit, hiring,
+     admissions, eligibility, insurance pricing)
+   - Output intended for external parties who will rely on it to make real
+     decisions (investors, banks, regulators, courts, patients)
+   - Jurisdiction-specific law or regulation plausibly applies and the request
+     gives no indication of which jurisdiction
+   - Errors would cause real financial, legal, reputational, or physical harm
+     to someone other than the requester
+   Set to "routine" otherwise. Default "routine" for purely creative or personal
+   tasks with no external reliance; default "sensitive" for anything touching
+   real money decisions, real people's life outcomes, or regulated institutions.
+5. Give a confidence score from 0 to 1.
+6. Give a one-sentence internal reasoning — the user never sees this.
+</task>
+
+If the request is too vague to classify confidently, still produce your best
+guess but lower the confidence score — never refuse to answer.
+
+<output_format>
+Schema-enforced — fill in good values without describing the shape.
+</output_format>`;
+
+const CONSIDERATIONS_SYSTEM = `You are the domain-expert-review step inside a prompt-engineering assistant.
+You are only called when a request has been flagged as touching a regulated,
+high-stakes, or expert domain. Your job is to think like a real subject-matter
+expert reviewing this specific request and surface what a generalist would miss.
+You do not write prompts, ask questions yourself, or give advice on the task.
+
+<the_question_to_answer>
+"If a genuine expert in this exact area reviewed this request before any work
+began, what specific gaps, risks, or jurisdiction-dependent details would they
+immediately flag as missing or potentially wrong?"
+
+Think concretely about THIS request and THIS subject. Generic scoping things
+— audience, tone, length, level of detail — are handled elsewhere. Focus only
+on things that are specific to this being a sensitive or regulated domain: what
+could go materially wrong, mislead a real decision-maker, or create legal or
+financial exposure if left unaddressed.
+</the_question_to_answer>
+
+<domain_expert_thinking>
+Use this as a thinking framework — apply only what genuinely fits this request.
+
+FOR FINANCIAL MODEL REQUESTS (equity valuations, DCF, forecasts, budgets):
+Think like a CFA charterholder or investment banker reviewing the brief.
+
+- DATA SOURCING & BASE YEAR: Is real company data needed? What is the most
+  recent fiscal year with complete published financials — is that pinned as
+  the model's base year? Floating this creates forecast ambiguity. Are the
+  financials available (annual report, exchange filing, Refinitiv, Bloomberg)?
+- FOREIGN EXCHANGE EXPOSURE: Does the company earn revenues in a different
+  currency from its costs? Export-heavy manufacturers (textiles, commodities,
+  electronics), multinationals, and import-dependent businesses all have
+  cross-currency P&Ls. Ignoring FX in these cases makes the model structurally
+  wrong — it is not an optional sensitivity, it is a primary earnings driver.
+- COMMODITY AND INPUT PRICE RISK: Are key costs tied to external commodity
+  prices (cotton, yarn, steel, oil, wheat, energy, freight)? In manufacturing
+  and agriculture, raw material cost is often 50–70% of COGS. If this isn't
+  modeled as an explicit assumption and sensitivity variable, the forecast will
+  be unreliable under any market movement.
+- VALUATION COMPLETENESS: For equity valuations of listed companies, a DCF
+  alone is not investment-grade analysis. Professional valuation always
+  cross-checks intrinsic value against market multiples from comparable listed
+  peers (EV/EBITDA, P/E, P/B, EV/Revenue depending on sector). Missing this
+  means the intrinsic value has no sanity-check anchor.
+- MARKET PRICE COMPARISON: For listed equity, computing an intrinsic value
+  without comparing it to the current market price leaves the analysis with
+  no actionable conclusion. The gap between intrinsic value and market price
+  is the investment thesis.
+- COUNTRY RISK PREMIUM: For companies in emerging or frontier markets, the
+  WACC must include a country risk premium on top of local risk-free rates
+  and standard equity risk premiums. Omitting this systematically understates
+  the discount rate and overstates intrinsic value.
+- CAPITAL STRUCTURE COMPLEXITY: Significant existing debt affects WACC,
+  interest coverage ratios, and the bridge from enterprise value to equity
+  value. Convertibles, warrants, or recent equity raises affect diluted share
+  count and per-share intrinsic value.
+- TERMINAL VALUE SENSITIVITY: Terminal value often represents 60–80% of DCF
+  enterprise value. The perpetual growth rate is the single highest-impact,
+  most subjective input in the model — it deserves explicit scrutiny and a
+  sensitivity table, not a single unexamined assumption.
+- ACCOUNTING FRAMEWORK: Which country? Which standard (IFRS, US GAAP, local
+  GAAP)? Listed vs private reporting requirements? Some jurisdictions require
+  specific line-item presentation that affects how the model is structured.
+
+FOR LEGAL / REGULATORY REQUESTS:
+- Which jurisdiction (country, state, region)?
+- Is this legal information vs legal advice — and does the output make that
+  distinction clear enough that a reader won't rely on it as the latter?
+- Are there recent regulatory changes that may have superseded training data?
+- Does any aspect require professional sign-off before acting on it?
+
+FOR HEALTHCARE / MEDICAL REQUESTS:
+- Is this clinical guidance or administrative context?
+- What is the evidence base (RCTs vs observational) for any claims?
+- Are there contraindications or population-specificity concerns?
+- Is any treatment or drug mentioned approved in the relevant jurisdiction?
+
+FOR EMPLOYMENT / HIRING REQUESTS:
+- Which protected characteristics are relevant in the applicable jurisdiction?
+- Could any screening criteria have disparate impact on a protected group?
+- Are there specific local labor law requirements the output must respect?
+
+FOR LENDING / CREDIT / INSURANCE REQUESTS:
+- Fair lending, anti-discrimination, and equal treatment requirements?
+- Jurisdiction-specific underwriting constraints or required disclosures?
+- Does any pricing or eligibility logic use proxies for protected characteristics?
+</domain_expert_thinking>
+
+<output_rules>
+- Identify 2–5 items specific to THIS request's domain risks. Quality over
+  count — if one thing truly dominates, return one. Never pad with filler.
+- Do NOT flag the destination AI's analytical capabilities as a risk. Whether
+  Gemini, Claude, or ChatGPT can perform DCF, regression, or legal analysis
+  is not a domain risk — that is handled in the generation step. Only flag
+  substantive domain gaps that the person or the final prompt needs to address.
+- Each item: a short plain-language label (shown to a non-technical person)
+  and one sentence explaining the real-world stakes if it's left unaddressed.
+- Order by how consequential the gap is if missed, most important first.
+- If after genuine consideration nothing domain-specific applies beyond what a
+  normal interview already surfaces, return an empty list. Do not invent risk.
+</output_rules>
+
+<output_format>
+Schema-enforced — fill in good values without describing the shape.
+</output_format>`;
+
+
+const SELECT_QUESTION_SYSTEM = `You are the question-selection step inside a prompt-engineering assistant for
+non-technical users. Each time you're called, look at everything said so far
+and decide exactly one thing: what to ask next, or whether enough is known to
+stop and generate the final result. You write every question and its options
+yourself, fresh, informed by the specific request and everything answered so
+far — there is no fixed script to pull from.
+
+<audience>
+The person answering has likely never heard the words "prompt engineering,"
+"tone," "scope," "context," or "parameters." Every question must be answerable
+by someone with no technical vocabulary. Use concrete, recognizable choices and
+real example phrasing instead of abstract category names. Never use the words
+tone, scope, context, parameters, or "format" as a bare noun in anything the
+user will read.
+</audience>
+
+<inputs_you_will_receive>
+- The original request and destination tool.
+- A short list of topics that are often worth probing for this category —
+  treat this purely as a source of inspiration for what might matter, never
+  as a list to work through in order or recite verbatim. Skip any topic that's
+  irrelevant here, and feel free to ask about something not on the list at
+  all if this specific request calls for it.
+- Possibly, a separate list of "required topics" flagged by an earlier
+  domain-review step as genuinely important for this specific request (this
+  only appears for requests touching a regulated or high-stakes domain).
+  These are not optional inspiration — see the hard rule below.
+- Every question already asked this session and the answer given.
+- The complexity flag ("small" or "big") and how many questions have been
+  asked so far.
+</inputs_you_will_receive>
+
+<required_topics_hard_rule>
+If a "required topics not yet covered" list is provided and non-empty, you
+MUST address one of them with this turn's question — pick whichever one is
+most natural to ask about next, phrased in plain language per <audience>, but
+do not skip past all of them to ask something else, and do not set action to
+"complete" while any remain. Set next_question.covers_topic_id to that
+topic's id so the app can track it as addressed once answered. If no such
+list is provided, or it's empty, this rule doesn't apply — fall back to your
+normal judgment below and leave covers_topic_id null.
+</required_topics_hard_rule>
+
+<what_makes_a_good_question>
+A good question is concrete and decision-relevant: knowing the answer should
+visibly change what gets written. Reject anything generic enough to apply to
+nearly any request in nearly any category — don't reflexively reach for
+audience, tone, and length on every single turn just because they're easy;
+ask about whichever specific thing would most change THIS particular output.
+Never ask something already answered or clearly implied by an earlier answer.
+Favor questions that surface concrete raw material — specific facts, numbers,
+names, must-include details, existing examples to match, or things to
+explicitly avoid — over questions that only narrow preferences, especially
+once the easy preference questions are out of the way.
+</what_makes_a_good_question>
+
+<identifying_details_come_first>
+If the output concerns, is addressed to, or is written on behalf of a specific
+real person, company, or entity — ask who's actually involved before spending
+questions on softer preferences. This applies to correspondence (emails,
+letters, cover letters) but equally to any task where specificity is the
+difference between a usable output and a placeholder template.
+
+For financial models specifically: if a real company is named, the listing
+status, exchange, and base year of financial data are foundational inputs that
+determine what data sources are available, what valuation conventions apply,
+and what regulatory framework governs the output. Ask about these early —
+before asking about presentation preferences, level of detail, or scenarios.
+A financial model with no answer on "is this company listed and where?" can
+only produce a generic template regardless of how many preference questions
+are asked. Skip only if the original request already made the answer clear.
+</identifying_details_come_first>
+
+<financial_model_probing>
+When the task is a financial model for a specific real company, prioritize
+surfacing these inputs — they are needed-for-completeness, not preferences:
+
+1. LISTING STATUS (if not already known): Is the company publicly listed?
+   If yes, on which exchange and what is the ticker? This determines: data
+   availability, whether multiples analysis is needed alongside DCF, and
+   what regulatory/reporting framework applies.
+
+2. BASE YEAR DATA (if not already known): What is the most recent complete
+   fiscal year the person has access to? Do they have the annual report or
+   published financials? Every forecast needs an anchored starting point.
+
+3. FOREIGN CURRENCY EXPOSURE (for export/import-heavy sectors — textiles,
+   commodities, manufacturing, tech): Does the company earn revenues in a
+   foreign currency while paying costs in local currency, or vice versa?
+   For an export-oriented manufacturer, the PKR/USD (or equivalent) rate
+   is often the single largest driver of reported margins. If not modeled
+   explicitly, the forecast will be fundamentally wrong under any FX move.
+
+4. COMMODITY/INPUT DEPENDENCIES (for manufacturing, agriculture, energy,
+   materials): What are the primary raw material inputs, and do their prices
+   fluctuate significantly with market conditions? Cotton prices for a textile
+   company, crude prices for a refinery, wheat prices for a food producer —
+   these must be explicit assumption and sensitivity variables, not absorbed
+   silently into a flat cost-of-goods assumption.
+
+5. VALUATION APPROACH (for equity models): Should the model produce only a
+   DCF intrinsic value, or also cross-check against comparable company
+   multiples? For a listed company, is there a current market price to compare
+   the intrinsic value against to form an over/undervalued view?
+
+Ask only one of these per turn, starting with whichever is most foundational
+given what has already been answered.
+</financial_model_probing>
+
+<choosing_input_type>
+- single_select / multi_select: when there's a recognizable, finite set of
+  reasonable answers. Offer 3-5 real options (not a forced "other" — the
+  person always has a way to type something different regardless of what
+  you list, so don't contort an option list trying to cover every case).
+- slider: when the honest answer is a point on a spectrum rather than a
+  discrete choice — formality, level of detail, how bold vs. safe, how much
+  risk to assume, and similar. Set options to exactly two entries: the low
+  end and the high end of the spectrum, in plain words.
+- free_text: when the answer is fundamentally open-ended and no useful set
+  of options exists — e.g. "what should it definitely mention?"
+Whichever type you choose, the options you return are suggestions to speed
+the person up, not an exhaustive menu.
+</choosing_input_type>
+
+<how_deep_to_go>
+- For "small" tasks: a couple of well-chosen questions is often enough.
+  Don't pad with more just to seem thorough — stopping after 2-3 sharp
+  questions is the right outcome, not a shortcut. But "small" governs how
+  many preference-style questions to ask, not whether a needed-for-
+  completeness identifying-details question (see above) gets asked at all —
+  a small task can still need one of its 2-3 questions to be exactly that.
+- For "big" tasks: go deeper before stopping. These have real stakes, so
+  push past surface preferences into the raw material that would actually
+  separate a generic result from one that fits this specific situation.
+  Resist completing after only 1-2 questions on a big task unless the
+  request was already extremely detailed going in.
+- Regardless of complexity: stop the moment additional questions would
+  stop changing the output. Ending early when truly done is correct;
+  the goal is no wasted questions in either direction, not a quota.
+</how_deep_to_go>
+
+<your_job_each_turn>
+1. Re-read the original request and every answer so far.
+2. If something specific and still-unresolved would meaningfully change the
+   final result, write one new question for it — following every rule above.
+3. If nothing like that remains, set action to "complete" and leave
+   next_question null.
+4. Never ask more than one question per turn. Never repeat a question already
+   asked this session, even reworded.
+</your_job_each_turn>
+
+<output_format>
+The response shape is enforced by a schema attached to this request — just
+fill in good values, you don't need to describe or repeat the shape yourself.
+When action is "complete", leave next_question absent/null.
+</output_format>`;
+
+const STAGE_PLANNER_SYSTEM = `You are the staging-decision step inside a prompt-engineering assistant. You
+are only called for tasks already flagged as large or consequential. Your job
+is to decide how many separate prompts the final deliverable should be broken
+into, and what each one is for — never to write the prompts themselves.
+
+<task>
+1. You'll be given informal guidance on how this category often breaks into
+   parts. Treat it as inspiration — use what genuinely fits, drop what doesn't,
+   and invent something not mentioned if this specific request calls for it.
+2. Base the real decision on the actual interview answers, not just the
+   category. The same category can land anywhere from one stage to four.
+3. If a single stage genuinely covers it, set collapsed_to_single to true.
+   This is the correct outcome whenever the task turned out simpler than its
+   initial "big" flag suggested — not a failure case.
+4. Never exceed four stages. If more would otherwise be justified, merge the
+   least-distinct adjacent pair until at four.
+5. Order stages in the sequence they must happen — foundation before build-out,
+   build-out before analysis, analysis before review or presentation polish.
+</task>
+
+<stage_balance_rules>
+Every stage should be a coherent, independently valuable unit of work. Avoid:
+
+- Stages so thin they produce only a list of headings with no real analysis.
+- Stages so overloaded they combine multiple sequential analytical steps that
+  each depend on the previous. Overloaded stages produce shallow output across
+  the board because the model runs out of depth before finishing any one part.
+
+For financial model tasks in particular, enforce these sequencing rules:
+- ASSUMPTIONS BEFORE FORECASTS: The base year anchor, data sourcing approach,
+  and all key assumptions (revenue drivers, FX rates, commodity prices, cost
+  structure, WACC inputs, growth rates) belong in Stage 1. The person needs to
+  validate assumptions before a full forecast is built on top of them.
+- FINANCIAL STATEMENTS BEFORE VALUATION: The full forecasted P&L, balance
+  sheet, and cash flow statement must be built before any DCF can be run,
+  because FCFF is derived from those statements. These belong in separate
+  stages if both are substantial.
+- DCF BEFORE SCENARIOS: The base-case DCF valuation (FCFF, WACC, terminal
+  value, intrinsic stock price) must be established cleanly before running
+  scenario and sensitivity analysis on it. Never combine DCF calculation and
+  scenario analysis in one stage — the base case must exist first.
+- REVIEW / INVESTOR NARRATIVE LAST: Compliance review, executive summary,
+  investor memo, or presentation polish always comes after the analytical work
+  is complete. And only include this stage if the interview answers indicated
+  an external audience that will actually judge the output.
+</stage_balance_rules>
+
+<output_notes>
+Write each stage's "purpose" in plain language — it is shown directly to the
+end user, so avoid internal jargon.
+</output_notes>
+
+<output_format>
+Schema-enforced — fill in good values without describing the shape.
+</output_format>`;
+
+const GENERATE_SYSTEM = `You are the final step inside a prompt-engineering assistant: you write the
+actual, ready-to-use prompt(s) the person will copy into another AI tool. This
+is the entire value of the product — write with real craft, not a generic
+restatement of the request.
+
+<destination_profiles>
+Each destination has different conventions, native capabilities, and built-in
+tools. Tailor the prompts you write to how the destination actually works.
+Never add assumptions or caveats in the prompt about things the destination
+can natively do — that is condescending and wastes the user's prompt space.
+
+CLAUDE: Use XML tags to separate distinct blocks (role, context, instructions,
+  examples, constraints). Claude follows explicit step-by-step instructions
+  precisely and reasons well over long supplied context. For non-trivial tasks,
+  invite step-by-step reasoning before giving a final answer. Claude does not
+  have native web search in most deployments — if real-time data is needed,
+  instruct the user to supply it as pasted context rather than telling Claude
+  to "search for" something it cannot access.
+
+CHATGPT: Clear markdown headers and numbered instructions. The Code Interpreter
+  (Data Analysis) tool can execute Python, build charts, and run actual
+  financial calculations — for financial models or data-heavy tasks, instruct
+  it to compute results in code rather than estimate them in prose. When the
+  conversation context includes a browsing tool, it can retrieve live data;
+  otherwise treat it like Claude and ask for pasted inputs.
+
+GEMINI: Markdown headers and numbered instructions. Gemini has native Google
+  Search grounding built in — for ANY task requiring current real-world data
+  (stock prices, company filings, commodity prices, exchange rates, analyst
+  estimates, regulatory details, market benchmarks), instruct it explicitly
+  and prominently to use its search/grounding tool to retrieve this information
+  rather than relying on training memory. Gemini is strong at structured
+  numerical analysis, step-by-step financial modeling, table-formatted output,
+  and working with very long context. For financial models, instruct it to
+  present statements as markdown tables, show all calculation methodology
+  before giving results, and verify all company-specific figures via search.
+  CRITICAL: Gemini can natively perform DCF analysis, WACC builds, ratio
+  analysis, scenario modeling, regression, and statistical work. Do NOT write
+  things like "if you have the ability to perform financial calculations" or
+  "assuming you can conduct DCF analysis" — it can, and these phrases make the
+  prompt look uncertain and unprofessional. Write instructions, not caveats.
+
+GROK: Plain, direct markdown with minimal ceremony. Responds well to being
+  told exactly what to do without heavy role-play framing. For tasks that
+  benefit from current events, real-time social context, or trending data,
+  say so explicitly — that is its distinguishing capability.
+
+PERPLEXITY: A research-and-citation tool, not a general generator. Frame as a
+  research brief: core question, specific sub-questions that must be answered,
+  required source recency, and an explicit ask for citations. Skip role-play
+  framing. Even here, reinforce the verified-vs-recalled distinction — its
+  citations cover what it retrieved, but it can still blend in unverified
+  recalled facts between citations.
+
+DEEPSEEK: Markdown headers and numbered instructions. For non-trivial
+  reasoning, analysis, or math-heavy tasks, explicitly invite it to reason
+  step by step before giving a final answer — this is where it adds real value.
+
+MICROSOFT COPILOT: Markdown headers and numbered instructions. Copilot
+  operates inside a specific Office app (Word, Excel, PowerPoint, Outlook) or
+  Windows. When the task implies working from a document or spreadsheet, say so
+  explicitly ("using the document/spreadsheet currently open") — it cannot
+  assume context it doesn't have open in front of it.
+
+MIDJOURNEY / IMAGE TOOLS: Use the destination's actual parameter conventions
+  (aspect ratio flags, style references, negative prompts, quality modifiers)
+  rather than prose descriptions. Match the exact syntax the tool expects.
+
+GENERAL: Clean, clearly-labeled plain-language instructions that work in any
+  chat-based AI tool. No tool-specific syntax.
+</destination_profiles>
+
+<core_principles>
+- This output is read by an AI model, not a non-technical person — use real
+  prompt-engineering technique freely: clear role-setting, explicit step-by-step
+  instructions, concrete constraints, examples where they'd genuinely help.
+- Translate every interview answer into concrete instruction — never restate
+  the answer's label. If the audience was "experienced investors," write that
+  directly into the prompt as an instruction about the level of sophistication,
+  terminology, and critical scrutiny to expect from the reader.
+- When a task involves a specific real company, person, or institution: make
+  that specificity explicit in the prompt. Reference the actual company name,
+  the actual exchange, the actual regulatory context the person described —
+  not generic placeholders.
+- Every value collected during the interview (sender name, recipient name,
+  job title, organisation, application role, contact person, any other
+  specific detail the person provided) MUST be written directly into the
+  prompt text as the real value. NEVER leave bracket placeholders like
+  [Your Name], [Job Title], [Company], [Recipient] in the output. The user
+  will not edit the prompt before sending it — if a bracket placeholder
+  appears, the prompt is broken. If you know the value from the interview,
+  use it. If you genuinely do not know a value, write a natural-language
+  description ("the recipient's name, which you should confirm") rather than
+  a bracket.
+- Match length to genuine necessity. A tweet prompt is a few sentences; a
+  financial model Stage 1 is substantial. Don't pad or compress out of habit.
+</core_principles>
+
+<financial_model_guidance>
+When writing prompts for financial model tasks, include these unless already
+captured by the interview or clearly irrelevant to this specific request:
+
+- BASE YEAR ANCHOR: Instruct the destination AI to explicitly identify and
+  state the most recent complete fiscal year as the base year, with sourced
+  actual figures, before any forecasting begins.
+- COMPARABLE MULTIPLES: For equity valuations of listed companies, instruct
+  the AI to cross-check the DCF intrinsic value against comparable company
+  market multiples (EV/EBITDA, P/E, P/B from identified sector peers). A DCF
+  standing alone with no multiples sanity-check is not investment-grade output.
+- MARKET PRICE COMPARISON: For listed equity, instruct the AI to retrieve the
+  current market price and state it explicitly alongside the intrinsic value,
+  so the output can form an over/undervalued conclusion.
+- FX ASSUMPTIONS: For companies with export revenues or cross-currency cost
+  structures, include an explicit FX assumption section (base rate, upside,
+  downside) and treat it as a named sensitivity variable with its own scenario.
+- COMMODITY SENSITIVITY: For manufacturing or commodity-dependent companies,
+  include the primary input material price as an explicit named assumption and
+  sensitivity variable — not absorbed silently into a flat COGS line.
+- COUNTRY RISK PREMIUM: For emerging or frontier market companies, instruct
+  the AI to include a country risk premium in the WACC build explicitly, in
+  addition to the local risk-free rate and standard equity risk premium.
+- TERMINAL VALUE TRANSPARENCY: Instruct the AI to state the terminal value
+  as a percentage of total enterprise value and to justify the perpetual growth
+  rate assumption — since terminal value often drives 60–80% of intrinsic
+  value, it deserves explicit visibility, not a single buried assumption.
+- CALCULATION FORMAT: For Gemini and ChatGPT specifically, instruct the AI to
+  present financial statements as formatted tables and to show methodology
+  step-by-step before stating results — not to summarize calculations in prose.
+</financial_model_guidance>
+
+<grounding_and_verification>
+Whenever the destination AI will need to state specific facts, figures, prices,
+rates, or citations about real companies, markets, people, or events, the
+prompt must explicitly instruct it to:
+
+1. Use its search/grounding/browsing tool for anything checkable. For Gemini,
+   make this instruction explicit, prominent, and unconditional — it always has
+   this capability, so phrase it as a direct instruction ("use Google Search to
+   retrieve..."), not a conditional ("if you have a search tool...").
+2. Visibly label every specific factual claim as either [VERIFIED via search]
+   or [UNVERIFIED — recalled from training, not confirmed via live source].
+   Unverified figures must carry this label rather than being presented with
+   the same confidence as retrieved data.
+3. Explicitly state [NO RELIABLE SOURCE FOUND] when a specific figure cannot
+   be verified, rather than substituting a plausible-sounding invented number.
+
+Precise-looking figures — exact share prices, commodity rates, WACC
+components, historical growth percentages — are exactly where unverified
+output looks most credible while being most dangerously wrong. Make this
+instruction prominent in the prompt, not buried at the end. Apply even for
+Perplexity (its citations cover retrieved content but it can still blend in
+unverified recall between citations). Skip only for purely creative prompts
+with no real-world factual content whatsoever.
+</grounding_and_verification>
+
+<assumptions_definition>
+The "assumptions" array is exclusively for gaps in information the USER would
+know but did not provide: specific names, real numbers, personal preferences,
+company-specific details, the person's own intent or constraints that you had
+to guess at.
+
+It is NEVER for questioning the destination AI's analytical capabilities.
+Do not write entries like:
+- "The AI can perform DCF analysis"
+- "The AI has access to web search or grounding tools"
+- "The AI has sufficient financial or legal expertise"
+- "The AI can conduct regression or ratio analysis"
+
+These are not user-information gaps. They are statements about the AI's
+capability, which is already addressed by how you write the prompt itself
+per <destination_profiles>. If you have written the prompt correctly for the
+destination, no capability assumptions are needed or appropriate.
+</assumptions_definition>
+
+<fast_mode>
+If no interview was conducted: fill every gap a real interview would have
+covered with the single most reasonable default. Record each assumption about
+the user's situation or intent as its own entry in "assumptions" — never
+silently guess without disclosing it. Do not record capability assumptions
+about the destination AI (see <assumptions_definition>).
+</fast_mode>
+
+<staged_output>
+If more than one stage was provided, produce one prompt per stage in order,
+each labeled with its stage title. Each later-stage prompt must be written
+assuming it will be sent in the SAME ongoing conversation as earlier stages —
+it can reference "the model built above" or "the assumptions established in
+Stage 1" without restating them, since the destination AI has them in context.
+Do not write any "send these in order" instruction — the app adds that
+automatically whenever there's more than one prompt.
+</staged_output>
+
+<elevated_stakes>
+When stakes are "sensitive": populate "elevated_stakes_notes" with concrete
+risks the person should verify before relying on the output — especially any
+flagged domain-risk topic that was skipped during the interview (skipped means
+an assumption was taken on faith rather than confirmed). Be specific to this
+request: name the actual concern, not a generic disclaimer. One short sentence
+per note. Phrase as things to verify, not definitive legal or financial
+conclusions. Leave empty when stakes are routine.
+</elevated_stakes>
+
+<output_format>
+Schema-enforced. Each prompt's "content" field is the actual prompt text as a
+plain string with real newlines and whatever internal formatting (XML tags,
+markdown tables, parameter flags) fits the destination per the rules above.
+For unstaged or single-stage tasks, "prompts" contains exactly one entry with
+"purpose" left null.
+</output_format>`;
+
+/* =====================================================================
+   ACCOUNT (simulates users / anon_sessions / usage_limits)
+   ===================================================================== */
+let account = { tier:"anonymous", creditsUsedThisPeriod:0, periodStartedAt:new Date().toISOString() };
+
+async function loadAccount(){
+  try{
+    const raw = localStorage.getItem("draft_stamp_account");
+    if (raw){
+      const parsed = JSON.parse(raw);
+      account = Object.assign(account, parsed);
+      maybeResetPeriod();
+    }
+  } catch(e){ /* no saved account yet — defaults stand */ }
+  renderAll();
+}
+function maybeResetPeriod(){
+  if (account.tier === "free"){
+    const started = new Date(account.periodStartedAt).getTime();
+    if (Date.now() - started > FREE_PERIOD_DAYS*24*3600*1000){
+      account.creditsUsedThisPeriod = 0;
+      account.periodStartedAt = new Date().toISOString();
+    }
+  }
+}
+async function saveAccount(){
+  try{ localStorage.setItem("draft_stamp_account", JSON.stringify(account)); }
+  catch(e){ console.error("storage save failed", e); }
+}
+function tierLimit(){ return TIER_LIMITS[account.tier] || 0; }
+function remaining(){ return Math.max(0, tierLimit() - account.creditsUsedThisPeriod); }
+function daysUntilReset(){
+  if (account.tier !== "free") return null;
+  const started = new Date(account.periodStartedAt).getTime();
+  const days = FREE_PERIOD_DAYS - Math.floor((Date.now()-started)/(24*3600*1000));
+  return Math.max(0, days);
+}
+function upgradeToFree(){
+  account.tier = "free";
+  account.creditsUsedThisPeriod = 0;
+  account.periodStartedAt = new Date().toISOString();
+  saveAccount();
+}
+async function resetAccount(){
+  account = { tier:"anonymous", creditsUsedThisPeriod:0, periodStartedAt:new Date().toISOString() };
+  try{ localStorage.removeItem("draft_stamp_account"); }
+  catch(e){ /* nothing saved yet, fine */ }
+  state = freshState();
+  renderAll();
+}
+
+/* =====================================================================
+   SESSION STATE (mirrors interview_sessions)
+   ===================================================================== */
+function freshState(){
+  return {
+    screen:"start",
+    originalRequest:"",
+    destination:"claude",
+    mode:"interview",
+    classification:null,
+    requiredTopics:[],
+    considerationsDone:false,
+    qaHistory:[],
+    currentQuestion:null,
+    multiSelections:[],
+    customAnswerMode:false,
+    freeTextDraft:"",
+    stagePlan:null,
+    finalResult:null,
+    usageEvents:[],
+    feedback:null,
+    error:null,
+    startError:null,
+    gateReason:null,
+    sessionCost:null,
+    decisionsOpen:false,
+    ledgerOpen:false,
+    topicsOpen:false,
+    _stampTimer:null,
+    _typeInterval:null
+  };
+}
+let state = freshState();
+
+function logUsage(step, model, usage){
+  state.usageEvents.push({step, model, input_tokens:usage.input_tokens||0, output_tokens:usage.output_tokens||0});
+}
+
+/* =====================================================================
+   API — calls this app's own server, which holds the real key. The
+   browser never sees it and never talks to Google directly.
+   ===================================================================== */
+async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model){
+  const genConfig = {
+    responseMimeType: "application/json",
+    responseSchema: responseSchema,
+    maxOutputTokens: maxOutputTokens || 1000
+  };
+  if (enableThinking === false){
+    genConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+  const response = await fetch("/api/gemini", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model: model || STRONG_MODEL,
+      systemInstruction: { parts:[{ text: systemPrompt }] },
+      contents: [{ parts:[{ text: userMessage }] }],
+      generationConfig: genConfig
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || data.error){
+    throw new Error((data.error && data.error.message) || ("Request failed (" + response.status + ")"));
+  }
+  const candidate = (data.candidates || [])[0];
+  const text = candidate && candidate.content && candidate.content.parts
+    ? candidate.content.parts.map(p => p.text || "").join("")
+    : "";
+  if (candidate && candidate.finishReason === "MAX_TOKENS"){
+    throw new Error("The response ran out of room (hit the token limit) before finishing — try again.");
+  }
+  const usageMeta = data.usageMetadata || {};
+  const usage = {
+    input_tokens: usageMeta.promptTokenCount || 0,
+    output_tokens: (usageMeta.candidatesTokenCount || 0) + (usageMeta.thoughtsTokenCount || 0)
+  };
+  return { text, usage };
+}
+
+// Gemini's responseSchema enforcement guarantees valid, fence-free JSON, so
+// this no longer needs to hunt for braces or strip markdown fences — it's a
+// direct parse, with a clear error only for the genuinely unexpected case.
+function parseJSON(text){
+  try{
+    return JSON.parse(text);
+  } catch(e){
+    throw new Error("Got back something that wasn't valid JSON. Try again.");
+  }
+}
+
+/* =====================================================================
+   RESPONSE SCHEMAS (Gemini responseSchema — shape is now enforced by the
+   API itself, not just requested in the prompt text)
+   ===================================================================== */
+const CATEGORY_ENUM = ["writing","code","image","research","financial_model","presentation","other"];
+
+const CLASSIFY_SCHEMA = {
+  type:"object",
+  properties:{
+    primary_category:{ type:"string", enum:CATEGORY_ENUM },
+    secondary_category:{ type:"string", enum:CATEGORY_ENUM, nullable:true },
+    complexity:{ type:"string", enum:["small","big"] },
+    stakes:{ type:"string", enum:["routine","sensitive"] },
+    confidence:{ type:"number" },
+    reasoning:{ type:"string" }
+  },
+  required:["primary_category","complexity","stakes","confidence","reasoning"]
+};
+
+const CONSIDERATIONS_SCHEMA = {
+  type:"object",
+  properties:{
+    required_topics:{
+      type:"array",
+      items:{
+        type:"object",
+        properties:{
+          id:{ type:"string" },
+          label:{ type:"string" },
+          reason:{ type:"string" }
+        },
+        required:["id","label","reason"]
+      }
+    }
+  },
+  required:["required_topics"]
+};
+
+const SELECT_QUESTION_SCHEMA = {
+  type:"object",
+  properties:{
+    action:{ type:"string", enum:["ask_question","complete"] },
+    next_question:{
+      type:"object",
+      nullable:true,
+      properties:{
+        id:{ type:"string" },
+        text:{ type:"string" },
+        input_type:{ type:"string", enum:["single_select","multi_select","slider","free_text"] },
+        options:{
+          type:"array",
+          nullable:true,
+          items:{
+            type:"object",
+            properties:{
+              label:{ type:"string" },
+              example:{ type:"string", nullable:true }
+            },
+            required:["label"]
+          }
+        },
+        hint:{ type:"string", nullable:true },
+        covers_topic_id:{ type:"string", nullable:true }
+      },
+      required:["id","text","input_type"]
+    }
+  },
+  required:["action"]
+};
+
+const STAGE_PLANNER_SCHEMA = {
+  type:"object",
+  properties:{
+    stages:{
+      type:"array",
+      items:{
+        type:"object",
+        properties:{
+          id:{ type:"string" },
+          title:{ type:"string" },
+          purpose:{ type:"string" }
+        },
+        required:["id","title","purpose"]
+      }
+    },
+    collapsed_to_single:{ type:"boolean" }
+  },
+  required:["stages","collapsed_to_single"]
+};
+
+const GENERATE_SCHEMA = {
+  type:"object",
+  properties:{
+    assumptions:{ type:"array", items:{ type:"string" } },
+    elevated_stakes_notes:{ type:"array", items:{ type:"string" } },
+    prompts:{
+      type:"array",
+      items:{
+        type:"object",
+        properties:{
+          label:{ type:"string" },
+          purpose:{ type:"string", nullable:true },
+          content:{ type:"string" }
+        },
+        required:["label","content"]
+      }
+    }
+  },
+  required:["assumptions","elevated_stakes_notes","prompts"]
+};
+
+/* =====================================================================
+   PROMPT BUILDERS
+   ===================================================================== */
+function maxQuestions(){
+  const c = state.classification;
+  const base = (c && c.complexity === "big") ? 8 : 5;
+  const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered).length;
+  // Never let the safety cap block coverage of a required topic that's still owed.
+  return Math.max(base, state.qaHistory.length + pendingRequired);
+}
+function buildClassifyMsg(){
+  return 'Destination: ' + state.destination + '\nUser request: "' + state.originalRequest + '"';
+}
+function buildConsiderationsMsg(){
+  const c = state.classification;
+  return [
+    'Original request: "' + state.originalRequest + '"',
+    "Destination: " + state.destination,
+    "Category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
+    "Complexity: " + c.complexity
+  ].join("\n");
+}
+function buildSelectQuestionMsg(forceTopic){
+  const c = state.classification;
+  const cats = [c.primary_category, c.secondary_category].filter(Boolean);
+  let seeds = [];
+  cats.forEach(cat => { seeds = seeds.concat(TOPIC_SEEDS[cat] || []); });
+  const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
+  const lines = [
+    'Original request: "' + state.originalRequest + '"',
+    "Destination: " + state.destination,
+    "Primary category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
+    "Complexity: " + c.complexity,
+    "Questions asked so far this session: " + state.qaHistory.length,
+    "",
+    "Topics that are often worth probing for this category (inspiration only, not a checklist):",
+    JSON.stringify(seeds),
+    "",
+    "Required topics not yet covered (JSON) — see required_topics_hard_rule:",
+    JSON.stringify(pendingRequired.map(t => ({id:t.id, label:t.label, reason:t.reason}))),
+    "",
+    "Already answered this session (JSON):",
+    JSON.stringify(state.qaHistory.map(q => ({question_id:q.id, text:q.text, answer:q.answer})))
+  ];
+  if (forceTopic){
+    lines.push("");
+    lines.push("OVERRIDE FOR THIS TURN ONLY: a previous turn failed to honor the hard rule. " +
+      "You must write a question covering exactly this required topic now — do not ask about " +
+      "anything else, and do not set action to complete: " + JSON.stringify(forceTopic));
+  }
+  return lines.join("\n");
+}
+function buildStagePlannerMsg(){
+  const c = state.classification;
+  const hint = STAGE_HINTS[c.primary_category] || "No specific guidance for this category — decide from general best practice.";
+  return [
+    "Category: " + c.primary_category,
+    "Informal guidance on how this category often stages (inspiration only):",
+    hint,
+    "",
+    "Interview answers (JSON):",
+    JSON.stringify(state.qaHistory.map(q => ({question_id:q.id, text:q.text, answer:q.answer})))
+  ].join("\n");
+}
+function buildGenerateMsg(){
+  const c = state.classification;
+  const lines = [
+    'Original request: "' + state.originalRequest + '"',
+    "Destination: " + state.destination,
+    "Category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
+    "Mode: " + state.mode,
+    "Stakes: " + c.stakes,
+    ""
+  ];
+  if (state.mode === "fast"){
+    lines.push("No interview was conducted — fill gaps with the single most reasonable default and disclose every assumption per your instructions.");
+  } else {
+    lines.push("Interview answers (JSON):");
+    lines.push(JSON.stringify(state.qaHistory.map(q => ({question:q.text, answer:q.answer}))));
+  }
+  if (c.stakes === "sensitive" && state.requiredTopics.length){
+    lines.push("");
+    lines.push("Domain-risk topics flagged by the review step, with status (JSON):");
+    lines.push(JSON.stringify(state.requiredTopics.map(t => ({
+      label:t.label, reason:t.reason,
+      status: t.dismissed ? "skipped (marked not applicable by the person)" : (t.covered ? "addressed during the interview" : "skipped (never asked)")
+    }))));
+  }
+  lines.push("");
+  if (state.stagePlan){
+    lines.push("Stage plan (JSON, ordered):");
+    lines.push(JSON.stringify(state.stagePlan.stages));
+  } else {
+    lines.push("No staging — produce a single prompt.");
+  }
+  return lines.join("\n");
+}
+
+/* =====================================================================
+   FLOW
+   ===================================================================== */
+function handleStartClick(){
+  const input = document.getElementById("request-input");
+  state.originalRequest = (input ? input.value : "").trim();
+  if (!state.originalRequest){
+    state.startError = "Type what you want to create first.";
+    renderAll();
+    return;
+  }
+  state.startError = null;
+  if (account.tier === "anonymous" && remaining() <= 0){
+    state.gateReason = "anon_out_of_uses"; state.screen = "gate"; renderAll(); return;
+  }
+  if (account.tier === "free" && remaining() <= 0){
+    state.gateReason = "free_out_of_uses"; state.screen = "gate"; renderAll(); return;
+  }
+  runClassify();
+}
+
+async function runClassify(){
+  state.screen = "classifying"; state.error = null; renderAll();
+  try{
+    const { text, usage } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODEL);
+    state.classification = parseJSON(text);
+    logUsage("classify", FAST_MODEL, usage);
+    state.screen = "classified";
+    renderAll();
+    state._stampTimer = setTimeout(proceedFromClassification, 1200);
+  } catch(e){
+    state.error = { step:"classify", message:e.message };
+    renderAll();
+  }
+}
+
+function proceedFromClassification(){
+  clearTimeout(state._stampTimer);
+  const c = state.classification;
+  if (account.tier === "anonymous" && c.complexity === "big"){
+    state.gateReason = "big_task"; state.screen = "gate"; renderAll(); return;
+  }
+  if (c.stakes === "sensitive" && !state.considerationsDone){
+    runConsiderations();
+    return;
+  }
+  afterConsiderations();
+}
+
+function afterConsiderations(){
+  const c = state.classification;
+  if (state.mode === "fast"){
+    if (c.complexity === "big") runStagePlanner(); else runGenerate();
+  } else {
+    runSelectQuestion();
+  }
+}
+
+async function runConsiderations(){
+  state.screen = "considerations_loading"; state.error = null; renderAll();
+  try{
+    const { text, usage } = await callGemini(CONSIDERATIONS_SYSTEM, buildConsiderationsMsg(), CONSIDERATIONS_SCHEMA, 800, false, FAST_MODEL);
+    const json = parseJSON(text);
+    logUsage("considerations", FAST_MODEL, usage);
+    state.requiredTopics = (json.required_topics || []).map(t => ({id:t.id, label:t.label, reason:t.reason, dismissed:false, covered:false}));
+    state.considerationsDone = true;
+    // Fast mode never shows extra screens — the list still flows into generation
+    // for assumption disclosure, it just doesn't pause for a click here.
+    if (state.mode === "fast" || !state.requiredTopics.length){
+      afterConsiderations();
+    } else {
+      state.screen = "considerations";
+      renderAll();
+    }
+  } catch(e){
+    state.error = { step:"considerations", message:e.message };
+    renderAll();
+  }
+}
+
+function continueAfterUpgrade(){
+  if (state.gateReason === "big_task"){
+    proceedFromClassification();
+  } else {
+    state.screen = "start"; renderAll();
+  }
+}
+
+function toggleRequiredTopic(id){
+  const t = state.requiredTopics.find(rt => rt.id === id);
+  if (t) t.dismissed = !t.dismissed;
+  renderAll();
+}
+
+async function runSelectQuestion(forceTopic){
+  if (!forceTopic && state.qaHistory.length >= maxQuestions()){
+    proceedAfterInterview();
+    return;
+  }
+  state.screen = "loading_question"; state.error = null; renderAll();
+  try{
+    const { text, usage } = await callGemini(SELECT_QUESTION_SYSTEM, buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, FAST_MODEL);
+    const json = parseJSON(text);
+    logUsage("select_question", FAST_MODEL, usage);
+    const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
+    if ((json.action === "complete" || !json.next_question) && pendingRequired.length){
+      if (forceTopic){
+        // Already gave it one explicit chance to comply and it still tried to skip —
+        // synthesize the question directly so coverage can never be silently dropped.
+        state.currentQuestion = { id: forceTopic.id, text: "Tell us about: " + forceTopic.label,
+          input_type: "free_text", options: null, hint: forceTopic.reason, covers_topic_id: forceTopic.id };
+        state.multiSelections = [];
+        state.customAnswerMode = false;
+        state.freeTextDraft = "";
+        state.screen = "interview";
+        renderAll();
+        return;
+      }
+      runSelectQuestion(pendingRequired[0]);
+      return;
+    }
+    if (json.action === "complete" || !json.next_question){
+      proceedAfterInterview();
+    } else {
+      state.currentQuestion = json.next_question;
+      state.multiSelections = [];
+      state.customAnswerMode = false;
+      state.freeTextDraft = "";
+      state.screen = "interview";
+      renderAll();
+    }
+  } catch(e){
+    state.error = { step:"select_question", message:e.message };
+    renderAll();
+  }
+}
+
+function submitAnswer(answerLabel){
+  const q = state.currentQuestion;
+  if (!answerLabel) return;
+  state.qaHistory.push({id:q.id, text:q.text, input_type:q.input_type, answer:answerLabel});
+  if (q.covers_topic_id){
+    const t = state.requiredTopics.find(rt => rt.id === q.covers_topic_id);
+    if (t) t.covered = true;
+  }
+  state.currentQuestion = null;
+  state.customAnswerMode = false;
+  state.freeTextDraft = "";
+  runSelectQuestion();
+}
+
+function proceedAfterInterview(){
+  const c = state.classification;
+  if (c.complexity === "big") runStagePlanner(); else runGenerate();
+}
+
+async function runStagePlanner(){
+  state.screen = "staging_loading"; state.error = null; renderAll();
+  try{
+    const { text, usage } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, FAST_MODEL);
+    state.stagePlan = parseJSON(text);
+    logUsage("plan_stages", FAST_MODEL, usage);
+    state.screen = "staged";
+    renderAll();
+  } catch(e){
+    state.error = { step:"plan_stages", message:e.message };
+    renderAll();
+  }
+}
+
+async function runGenerate(){
+  state.screen = "generating_loading"; state.error = null; renderAll();
+  try{
+    const { text, usage } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, true, STRONG_MODEL);
+    const json = parseJSON(text);
+    state.finalResult = {
+      assumptions: Array.isArray(json.assumptions) ? json.assumptions : [],
+      elevatedStakesNotes: Array.isArray(json.elevated_stakes_notes) ? json.elevated_stakes_notes : [],
+      prompts: (Array.isArray(json.prompts) ? json.prompts : []).map((p,i) => ({
+        label: p.label || ("Prompt " + (i+1)),
+        purpose: p.purpose || null,
+        content: p.content || ""
+      }))
+    };
+    logUsage("generate", STRONG_MODEL, usage);
+    finalizeSession();
+    state.screen = "result";
+    renderAll();
+    startTypewriter();
+  } catch(e){
+    state.error = { step:"generate", message:e.message };
+    renderAll();
+  }
+}
+
+function finalizeSession(){
+  const c = state.classification;
+  let cost;
+  if (c.complexity === "small"){
+    cost = 1;
+  } else {
+    const n = (state.stagePlan && state.stagePlan.stages && state.stagePlan.stages.length) || 1;
+    cost = 2 + Math.min(Math.max(n,1),4);
+  }
+  state.sessionCost = cost;
+  account.creditsUsedThisPeriod += cost;
+  saveAccount();
+}
+
+function retryLastStep(){
+  if (!state.error) return;
+  const step = state.error.step;
+  state.error = null;
+  if (step === "classify") runClassify();
+  else if (step === "considerations") runConsiderations();
+  else if (step === "select_question") runSelectQuestion();
+  else if (step === "plan_stages") runStagePlanner();
+  else if (step === "generate") runGenerate();
+}
+
+function startOver(){
+  clearTimeout(state._stampTimer);
+  clearInterval(state._typeInterval);
+  state = freshState();
+  renderAll();
+}
+
+// Used when the person is blocked (e.g. the out-of-uses gate) rather than
+// genuinely finished — their typed request was already captured into state
+// by handleStartClick before the gate fired, so there's no reason to throw
+// it away just because they're sent back to the start screen.
+function backToStart(){
+  clearTimeout(state._stampTimer);
+  state.screen = "start";
+  state.gateReason = null;
+  state.error = null;
+  renderAll();
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderTopbar(){
+  const limit = tierLimit();
+  const left = remaining();
+  const tierLabel = account.tier === "anonymous" ? "Anonymous" : "Free account";
+  let detail = left + " / " + limit + " uses left";
+  if (account.tier === "free") detail += " · resets in " + daysUntilReset() + "d";
+  else detail += " · one-time";
+  document.getElementById("topbar-right").innerHTML =
+    '<span class="chip">' + esc(tierLabel) + '</span>' +
+    '<span class="chip">' + esc(detail) + '</span>' +
+    '<button class="link-btn" data-action="reset-account">Reset demo account</button>' +
+    '<button class="link-btn" data-action="start-over">Start over</button>';
+}
+
+function destinationPills(){
+  const opts = [["claude","Claude"],["chatgpt","ChatGPT"],["gemini","Gemini"],["grok","Grok"],
+    ["perplexity","Perplexity"],["deepseek","DeepSeek"],["copilot","Microsoft Copilot"],
+    ["midjourney","Midjourney"],["general","General"]];
+  return '<div class="pill-row">' + opts.map(o =>
+    '<button class="pill-btn ' + (state.destination===o[0]?"selected":"") + '" data-action="set-destination" data-value="' + o[0] + '">' + esc(o[1]) + '</button>'
+  ).join("") + '</div>';
+}
+
+function modeCards(){
+  return '<div class="mode-grid">' +
+    '<button class="mode-card ' + (state.mode==="fast"?"selected":"") + '" data-action="set-mode" data-value="fast">' +
+      '<div class="mc-title">Quick draft</div><div class="mc-sub">Best guess now, no questions asked.</div></button>' +
+    '<button class="mode-card ' + (state.mode==="interview"?"selected":"") + '" data-action="set-mode" data-value="interview">' +
+      '<div class="mc-title">Guided interview</div><div class="mc-sub">A few quick questions first, for a sharper result.</div></button>' +
+  '</div>';
+}
+
+function renderStart(){
+  return '' +
+    '<h1 class="title">Draft &amp; Stamp</h1>' +
+    '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
+    '<p class="meta-caption">Built straight from this project\'s own pipeline spec: classify &rarr; ask &rarr; stage &rarr; write.</p>' +
+    '<label class="field-label" for="request-input">What do you want to create?</label>' +
+    '<textarea id="request-input" placeholder="e.g. a tweet about our new coffee blend, or a financial model for a seed round">' + esc(state.originalRequest) + '</textarea>' +
+    (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
+    '<label class="field-label">Where will you paste this prompt?</label>' +
+    destinationPills() +
+    '<label class="field-label">How should we get there?</label>' +
+    modeCards() +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="start">Start drafting</button></div>';
+}
+
+function renderLoading(line){
+  return '<p class="loading-line">' + esc(line) + '<span class="cursor">▌</span></p>';
+}
+
+function renderClassified(){
+  const c = state.classification;
+  const label = c.primary_category.replace(/_/g," ") + (c.secondary_category ? (" + " + c.secondary_category.replace(/_/g," ")) : "");
+  const stakesNote = c.stakes === "sensitive" ? " &middot; flagged for review" : "";
+  return '' +
+    '<div class="stamp-wrap"><span class="stamp">Filed &middot; ' + esc(label) + ' &middot; ' + esc(c.complexity) + stakesNote + '</span></div>' +
+    '<p class="stamp-sub">' + (c.reasoning ? esc(c.reasoning) : "Got it — figuring out the best next step.") + '</p>' +
+    '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="continue-after-classification">Continue</button></div>';
+}
+
+function renderGate(){
+  let title, body, showUpgrade;
+  if (state.gateReason === "big_task"){
+    title = "This one needs a bit more room.";
+    body = "Bigger requests — the kind worth multiple drafts — need a free account, since an anonymous visit only carries two uses and a bigger task starts at three.";
+    showUpgrade = true;
+  } else if (state.gateReason === "anon_out_of_uses"){
+    title = "You're out of free uses for now.";
+    body = "Anonymous visits get two one-time uses. A free account gives you eight more, refreshed every 30 days.";
+    showUpgrade = true;
+  } else {
+    title = "You're out of free uses for now.";
+    body = "Your free account resets in " + daysUntilReset() + " day(s).";
+    showUpgrade = false;
+  }
+  return '' +
+    '<div class="gate-icon">&#9863;</div>' +
+    '<h1 class="title" style="text-align:center;font-size:1.5rem;">' + esc(title) + '</h1>' +
+    '<p class="subtitle" style="text-align:center;">' + esc(body) + '</p>' +
+    (showUpgrade
+      ? '<div class="btn-row" style="justify-content:center;"><button class="btn btn-primary" data-action="upgrade">Set up free access (simulated)</button></div><p class="meta-caption" style="text-align:center;border-left:none;">This prototype doesn\'t create a real account — it only unlocks the demo\'s free tier in your browser.</p>'
+      : '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="back-to-start">Back to start</button></div>') +
+    '<div class="btn-row" style="justify-content:center;"><button class="custom-toggle" data-action="reset-account">Testing this prototype? Reset the simulated account</button></div>';
+}
+
+function renderConsiderations(){
+  const topics = state.requiredTopics;
+  return '' +
+    '<div class="stamp-wrap"><span class="stamp amber">Flagged &middot; ' + topics.length + ' to cover</span></div>' +
+    '<p class="stamp-sub">This touches a regulated or high-stakes area, so a quick expert pass came back with a few things worth nailing down. Anything that genuinely doesn\'t apply, mark below — everything left checked will get asked about during the interview.</p>' +
+    '<ul class="topic-list">' + topics.map(t =>
+      '<li class="topic-row ' + (t.dismissed?"dismissed":"") + '" data-action="toggle-required-topic" data-value="' + esc(t.id) + '">' +
+        '<span class="check-box ' + (t.dismissed?"":"on") + '">' + (t.dismissed?"":"✓") + '</span>' +
+        '<div><div class="topic-label">' + esc(t.label) + '</div><div class="topic-reason">' + esc(t.reason) + '</div></div>' +
+      '</li>'
+    ).join("") + '</ul>' +
+    '<div class="btn-row" style="justify-content:center;"><button class="btn btn-primary" data-action="continue-after-considerations">Continue</button></div>';
+}
+
+function renderCustomToggle(q){
+  if (q.input_type === "free_text") return "";
+  return '<button class="custom-toggle" data-action="use-custom-answer">Type your own answer instead</button>';
+}
+
+function renderOptionInput(q){
+  if (state.customAnswerMode && q.input_type !== "free_text"){
+    return '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
+      '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Continue</button></div>' +
+      '<button class="custom-toggle" data-action="use-suggested-options">Back to suggested options</button>';
+  }
+  if (q.input_type === "single_select"){
+    return '<div class="option-stack">' + q.options.map(o =>
+      '<button class="option-btn" data-action="select-option" data-value="' + esc(o.label) + '">' +
+        '<span class="option-label">' + esc(o.label) + '</span>' +
+        (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
+      '</button>'
+    ).join("") + '</div>' + renderCustomToggle(q);
+  }
+  if (q.input_type === "multi_select"){
+    return '<div class="option-stack">' + q.options.map(o => {
+      const on = state.multiSelections.includes(o.label);
+      return '<div class="check-row" data-action="toggle-multi" data-value="' + esc(o.label) + '">' +
+        '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
+        '<span class="option-label">' + esc(o.label) + '</span>' +
+      '</div>';
+    }).join("") + '</div>' +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-multi">Continue</button></div>' +
+    renderCustomToggle(q);
+  }
+  if (q.input_type === "slider"){
+    const lo = (q.options && q.options[0] && q.options[0].label) || "Less";
+    const hi = (q.options && q.options[q.options.length-1] && q.options[q.options.length-1].label) || "More";
+    return '<div class="slider-row">' +
+      '<div class="slider-labels"><span>' + esc(lo) + '</span><span>' + esc(hi) + '</span></div>' +
+      '<input type="range" id="slider-input" min="0" max="100" value="50">' +
+    '</div>' +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-slider">Continue</button></div>' +
+    renderCustomToggle(q);
+  }
+  // free_text
+  return '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Continue</button></div>';
+}
+
+function renderInterview(){
+  const q = state.currentQuestion;
+  const pending = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
+  let html = '' +
+    '<div class="progress-note">' + state.qaHistory.length + ' decision' + (state.qaHistory.length===1?"":"s") + ' logged so far</div>' +
+    (pending.length ? '<div class="pending-topics">Still need to cover: ' + pending.map(t => esc(t.label)).join(", ") + '</div>' : '') +
+    '<p class="question-text">' + esc(q.text) + '</p>' +
+    (q.hint ? '<p class="question-hint">' + esc(q.hint) + '</p>' : '') +
+    renderOptionInput(q);
+  if (state.qaHistory.length){
+    html += '<button class="decisions-toggle" data-action="toggle-decisions">' + (state.decisionsOpen?"Hide":"Show") + ' decisions so far</button>';
+    if (state.decisionsOpen){
+      html += '<div class="decisions-log">' + state.qaHistory.map(item =>
+        '<div class="decision-row"><span class="decision-tick">✓</span><span><span class="decision-q">' + esc(item.text) + '</span> — <span class="decision-a">' + esc(item.answer) + '</span></span></div>'
+      ).join("") + '</div>';
+    }
+  }
+  return html;
+}
+
+function renderStaged(){
+  const plan = state.stagePlan;
+  const n = plan.stages.length;
+  const single = plan.collapsed_to_single || n <= 1;
+  const stampText = single ? "One part" : "Staged · " + n + " parts";
+  const sub = single ? "Turned out simple enough for a single prompt." : "Big enough to split into stages.";
+  return '' +
+    '<div class="stamp-wrap"><span class="stamp">' + esc(stampText) + '</span></div>' +
+    '<p class="stamp-sub">' + esc(sub) + '</p>' +
+    '<ul class="stage-list">' + plan.stages.map((s,i) =>
+      '<li class="stage-item"><span class="stage-num">0' + (i+1) + '</span><div><div class="stage-title">' + esc(s.title) + '</div><div class="stage-purpose">' + esc(s.purpose) + '</div></div></li>'
+    ).join("") + '</ul>' +
+    '<div class="btn-row" style="justify-content:center;"><button class="btn btn-primary" data-action="continue-after-staging">Write the prompt' + (single?"":"s") + '</button></div>';
+}
+
+function renderResult(){
+  const r = state.finalResult;
+  const multi = r.prompts.length > 1;
+  let html = '<div class="stamp-wrap"><span class="stamp green">Approved</span></div>';
+
+  if (r.assumptions.length){
+    html += '<div class="note-panel note-assumptions">' +
+      '<div class="note-panel-title">Assumptions made — worth a quick check</div>' +
+      '<ul class="note-list">' + r.assumptions.map(a => '<li>' + esc(a) + '</li>').join("") + '</ul>' +
+    '</div>';
+  }
+
+  if (multi){
+    html += '<p class="staged-order-note">Use these prompts in order, inside the same conversation — do not start a new chat between steps.</p>';
+  }
+
+  html += '<div class="prompt-cards">' + r.prompts.map((p,i) =>
+    '<div class="prompt-card">' +
+      '<div class="prompt-card-head">' +
+        '<div>' +
+          '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
+          (p.purpose ? '<div class="prompt-card-purpose">' + esc(p.purpose) + '</div>' : '') +
+        '</div>' +
+        '<button class="btn btn-small prompt-copy-btn" data-action="copy-prompt" data-value="' + i + '">Copy</button>' +
+      '</div>' +
+      '<div class="output-block"><pre class="output-text" id="prompt-text-' + i + '">' + esc(p.content) + '</pre></div>' +
+    '</div>'
+  ).join("") + '</div>';
+
+  if (multi){
+    html += '<div class="btn-row" style="justify-content:center;"><button class="btn" id="copy-all-btn" data-action="copy-all">Copy all, in order</button></div>';
+  }
+
+  if (r.elevatedStakesNotes.length){
+    html += '<div class="note-panel note-stakes">' +
+      '<div class="note-panel-title">Worth double-checking before you use this</div>' +
+      '<ul class="note-list">' + r.elevatedStakesNotes.map(n => '<li>' + esc(n) + '</li>').join("") + '</ul>' +
+    '</div>';
+  }
+
+  html += '' +
+    '<p class="cost-line">Used ' + state.sessionCost + ' credit' + (state.sessionCost===1?"":"s") + ' from your ' + (account.tier==="anonymous"?"anonymous":"free") + ' balance.</p>' +
+    '<div class="feedback-row">' +
+      '<span style="font-size:0.88rem;color:var(--muted);">Was this prompt good?</span>' +
+      '<button class="fb-btn" id="fb-up" data-action="feedback" data-value="up">👍</button>' +
+      '<button class="fb-btn" id="fb-down" data-action="feedback" data-value="down">👎</button>' +
+    '</div>' +
+    '<button class="ledger-toggle" data-action="toggle-ledger">' + (state.ledgerOpen?"Hide":"Show") + ' what happened behind the scenes</button>' +
+    (state.ledgerOpen ? renderLedger() : '') +
+    '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>';
+
+  return html;
+}
+
+function renderLedger(){
+  return '<table class="ledger-table"><thead><tr><th>Step</th><th>Model</th><th>In</th><th>Out</th></tr></thead><tbody>' +
+    state.usageEvents.map(e => '<tr><td>' + esc(e.step) + '</td><td>' + esc(e.model) + '</td><td>' + e.input_tokens + '</td><td>' + e.output_tokens + '</td></tr>').join("") +
+    '</tbody></table>';
+}
+
+function renderErrorBanner(){
+  if (!state.error) return '';
+  return '<div class="error-banner">Something went wrong during the ' + esc(state.error.step.replace(/_/g," ")) + ' step: ' + esc(state.error.message) +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="retry">Try again</button><button class="btn" data-action="start-over">Start over</button></div></div>';
+}
+
+function renderAll(){
+  renderTopbar();
+  const app = document.getElementById("app");
+  let body = "";
+  switch(state.screen){
+    case "start": body = renderStart(); break;
+    case "classifying": body = renderLoading("Reading what you wrote…"); break;
+    case "classified": body = renderClassified(); break;
+    case "gate": body = renderGate(); break;
+    case "considerations_loading": body = renderLoading("Checking what an expert in this area would flag…"); break;
+    case "considerations": body = renderConsiderations(); break;
+    case "loading_question": body = renderLoading("Thinking about what to ask next…"); break;
+    case "interview": body = renderInterview(); break;
+    case "staging_loading": body = renderLoading("Planning how to break this into stages…"); break;
+    case "staged": body = renderStaged(); break;
+    case "generating_loading": body = renderLoading("Writing your prompt…"); break;
+    case "result": body = renderResult(); break;
+    default: body = renderStart();
+  }
+  app.innerHTML = body + renderErrorBanner();
+}
+
+/* =====================================================================
+   TYPEWRITER (result screen only — uses direct DOM writes so it isn't
+   interrupted by the lightweight re-renders copy/feedback trigger)
+   ===================================================================== */
+function startTypewriter(){
+  clearInterval(state._typeInterval);
+  const prompts = (state.finalResult && state.finalResult.prompts) || [];
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion){
+    prompts.forEach((p,i) => { const el = document.getElementById("prompt-text-" + i); if (el) el.textContent = p.content; });
+    return;
+  }
+  let boxIndex = 0;
+  function typeNextBox(){
+    if (boxIndex >= prompts.length) return;
+    const el = document.getElementById("prompt-text-" + boxIndex);
+    const full = prompts[boxIndex].content;
+    if (!el || full.length === 0){ boxIndex++; typeNextBox(); return; }
+    el.textContent = "";
+    let i = 0;
+    const chunk = Math.max(1, Math.floor(full.length/250));
+    state._typeInterval = setInterval(() => {
+      i += chunk;
+      el.textContent = full.slice(0, i);
+      if (i >= full.length){
+        clearInterval(state._typeInterval);
+        boxIndex++;
+        typeNextBox();
+      }
+    }, 12);
+  }
+  typeNextBox();
+}
+
+function flashCopied(btn){
+  if (!btn) return;
+  const original = btn.dataset.originalLabel || btn.textContent;
+  btn.dataset.originalLabel = original;
+  btn.textContent = "Copied";
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1400);
+}
+
+function flashCopyFailed(btn){
+  if (!btn) return;
+  const original = btn.dataset.originalLabel || btn.textContent;
+  btn.dataset.originalLabel = original;
+  btn.textContent = "Couldn't copy — select manually";
+  setTimeout(() => { btn.textContent = original; }, 2400);
+}
+
+// navigator.clipboard can silently fail or be unavailable depending on context
+// (sandboxed iframe, non-secure origin, browser permissions), so this falls
+// back to the older execCommand approach rather than just doing nothing.
+function copyTextToClipboard(text){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+  }
+  return legacyCopy(text);
+}
+
+function legacyCopy(text){
+  return new Promise((resolve, reject) => {
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (ok) resolve(); else reject(new Error("execCommand copy failed"));
+    } catch(e){ reject(e); }
+  });
+}
+
+function copyPrompt(index){
+  const p = state.finalResult && state.finalResult.prompts[index];
+  if (!p) return;
+  const btn = document.querySelector('.prompt-copy-btn[data-value="' + index + '"]');
+  copyTextToClipboard(p.content).then(() => flashCopied(btn)).catch(() => flashCopyFailed(btn));
+}
+
+function copyAllPrompts(){
+  if (!state.finalResult) return;
+  const joined = state.finalResult.prompts.map(p => "### " + p.label + "\n\n" + p.content).join("\n\n---\n\n");
+  const btn = document.getElementById("copy-all-btn");
+  copyTextToClipboard(joined).then(() => flashCopied(btn)).catch(() => flashCopyFailed(btn));
+}
+
+function setFeedback(value){
+  state.feedback = value;
+  const up = document.getElementById("fb-up");
+  const down = document.getElementById("fb-down");
+  if (up) up.classList.toggle("active", value === "up");
+  if (down) down.classList.toggle("active", value === "down");
+}
+
+/* =====================================================================
+   EVENT DELEGATION
+   ===================================================================== */
+// Bound to #app itself (which persists across renders), not to any specific
+// textarea (which gets recreated every renderAll()) — this is what keeps
+// typed text alive across re-renders triggered by unrelated clicks like
+// switching destination/mode or toggling the ledger.
+document.getElementById("app").addEventListener("input", function(e){
+  if (e.target.id === "request-input") state.originalRequest = e.target.value;
+  else if (e.target.id === "free-text-input") state.freeTextDraft = e.target.value;
+});
+
+document.getElementById("app").addEventListener("click", function(e){
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const action = el.dataset.action;
+  switch(action){
+    case "set-destination": state.destination = el.dataset.value; renderAll(); break;
+    case "set-mode": state.mode = el.dataset.value; renderAll(); break;
+    case "start": handleStartClick(); break;
+    case "continue-after-classification": proceedFromClassification(); break;
+    case "toggle-required-topic": toggleRequiredTopic(el.dataset.value); break;
+    case "continue-after-considerations": afterConsiderations(); break;
+    case "select-option": submitAnswer(el.dataset.value); break;
+    case "use-custom-answer": state.customAnswerMode = true; renderAll(); break;
+    case "use-suggested-options": state.customAnswerMode = false; renderAll(); break;
+    case "toggle-multi": {
+      const v = el.dataset.value;
+      const idx = state.multiSelections.indexOf(v);
+      if (idx === -1) state.multiSelections.push(v); else state.multiSelections.splice(idx,1);
+      renderAll();
+      break;
+    }
+    case "submit-multi": {
+      if (!state.multiSelections.length){ renderAll(); break; }
+      submitAnswer(state.multiSelections.join(", "));
+      break;
+    }
+    case "submit-free-text": {
+      const input = document.getElementById("free-text-input");
+      const val = input ? input.value.trim() : "";
+      if (val) submitAnswer(val);
+      break;
+    }
+    case "submit-slider": {
+      const input = document.getElementById("slider-input");
+      submitAnswer((input ? input.value : "50") + "/100");
+      break;
+    }
+    case "continue-after-staging": runGenerate(); break;
+    case "retry": retryLastStep(); break;
+    case "start-over": startOver(); break;
+    case "back-to-start": backToStart(); break;
+    case "reset-account": resetAccount(); break;
+    case "upgrade":
+      upgradeToFree();
+      renderTopbar();
+      continueAfterUpgrade();
+      break;
+    case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
+    case "copy-all": copyAllPrompts(); break;
+    case "feedback": setFeedback(el.dataset.value); break;
+    case "toggle-ledger": state.ledgerOpen = !state.ledgerOpen; renderAll(); break;
+    case "toggle-decisions": state.decisionsOpen = !state.decisionsOpen; renderAll(); break;
+  }
+});
+
+document.getElementById("topbar-right").addEventListener("click", function(e){
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  if (el.dataset.action === "start-over") startOver();
+  else if (el.dataset.action === "reset-account") resetAccount();
+});
+
+loadAccount();
+</script>
+</body>
+</html>

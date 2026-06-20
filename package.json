@@ -1,0 +1,12 @@
+{
+  "name": "draft-and-stamp",
+  "version": "1.0.0",
+  "description": "Draft & Stamp - prompt-engineering assistant, running locally with a real backend",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
