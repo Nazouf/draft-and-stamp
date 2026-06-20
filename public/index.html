@@ -399,9 +399,13 @@
    ===================================================================== */
 const TOPIC_SEEDS = {
   writing: ["the real names of any people, companies, or titles involved — or whether to use placeholders",
-    "who will read it", "the feel or voice it should have", "how long it should be",
-    "whether it should end with a specific call to action", "facts or details that must be included",
-    "existing writing (yours or someone else's) to match the style of", "anything it should avoid saying"],
+    "who will read it and what relationship the writer has with them — close colleague, hiring manager, a company they've never contacted, a recruiter, etc.",
+    "the feel or voice — formal and polished, warm and conversational, direct and brief, friendly but professional, or something in between",
+    "how long it should be",
+    "whether it should end with a specific call to action or next step",
+    "facts, numbers, or specific details that must be included",
+    "existing writing (yours or someone else's) to match the style of",
+    "anything it should avoid saying, or any tone it should not take"],
   financial_model: [
     "what the model is actually for — internal budget, investor pitch, equity valuation, M&A diligence, lender presentation, or personal planning",
     "whether this is for a specific real company — if so, whether it is publicly listed, on which exchange, and the ticker symbol",
@@ -435,7 +439,7 @@ const TOPIC_SEEDS = {
 };
 
 const STAGE_HINTS = {
-  financial_model: "For equity/DCF models: Stage 1 = data foundation — base year actuals, sourcing approach, and all key assumptions (revenue drivers, FX rates, commodity prices, cost structure, WACC inputs) before any forecasting begins, so the person can validate assumptions first. Stage 2 = full financial statement build-out — forecasted income statement, balance sheet, and cash flow statement with explicit methodology per line item. Stage 3 = valuation — DCF (FCFF, WACC, terminal value) AND comparable company multiples to cross-check; intrinsic value vs current market price for listed equity. Stage 4 = scenario analysis and investor-ready output — best/base/worst cases, sensitivity tables, executive summary or narrative. CRITICAL rule: never combine DCF calculation and scenario analysis in the same stage — establish the base-case model cleanly first, then run sensitivities in a separate stage. For simpler internal budgets or forecasts without a valuation requirement: 1–2 stages is usually right. Collapse to one stage only if the task is genuinely a single analytical unit.",
+  financial_model: "SCOPE FIRST — only plan stages for what was explicitly requested. If the user asked for comparable valuation only: one stage, comps analysis, done. If the user asked for DCF only: one to two stages. If the user asked for a full model (forecast + DCF + comps): follow the sequencing below. Never add a valuation stage to a forecast request, or a DCF stage to a comps-only request, just because it seems standard practice. The user controls scope.\n\nFor FULL equity valuation models (explicitly including forecast + DCF + comps): Stage 1 = data foundation — base year actuals, sourcing approach, and all key assumptions (revenue drivers, FX rates, commodity prices, cost structure, WACC inputs) before any forecasting begins. Stage 2 = full financial statement build-out — forecasted income statement, balance sheet, and cash flow statement with explicit methodology per line item. Stage 3 = valuation — DCF (FCFF, WACC, terminal value) AND comparable company multiples; intrinsic value vs current market price for listed equity. Stage 4 = scenario analysis and investor-ready output — best/base/worst cases, sensitivity tables, executive summary. CRITICAL: never combine DCF calculation and scenario analysis in the same stage. For comps-only, forecast-only, or budget-only tasks: 1 stage is almost always right.",
   writing: "Usually short enough to stay one stage. Only split it if there are genuinely distinct pieces to draft separately — for example a long piece with real sections, or a sequence like a teaser followed by the full piece.",
   code: "Often breaks into: the core logic; then edge-case handling and validation; then polish, tests, or docs, but only if it's something that'll be reused rather than run once. Collapse to one stage for anything simple.",
   presentation: "Often breaks into: overall structure/outline; then slide-by-slide content; then speaker notes or visual polish, but only if those were actually asked for.",
@@ -506,8 +510,15 @@ any prompts, questions, or advice — only this classification.
    Set to "routine" otherwise. Default "routine" for purely creative or personal
    tasks with no external reliance; default "sensitive" for anything touching
    real money decisions, real people's life outcomes, or regulated institutions.
-5. Give a confidence score from 0 to 1.
-6. Give a one-sentence internal reasoning — the user never sees this.
+5. Detect the intended output format from the request:
+   - "excel_file" if the request mentions excel, spreadsheet, xlsx, xls, "in excel", "excel model", "excel based", or similar
+   - "presentation_file" if it mentions slide deck, PowerPoint, ppt, presentation slides
+   - "code_file" if it mentions a script, program, app, or file to be run/executed
+   - "written_text" if it's an email, letter, report, essay, cover letter, or any prose document
+   - "image" if it's a prompt for an image generation tool
+   - "auto" if no specific output format is indicated — this is the default
+6. Give a confidence score from 0 to 1.
+7. Give a one-sentence internal reasoning — the user never sees this.
 </task>
 
 If the request is too vague to classify confidently, still produce your best
@@ -604,6 +615,16 @@ FOR LENDING / CREDIT / INSURANCE REQUESTS:
 - Does any pricing or eligibility logic use proxies for protected characteristics?
 </domain_expert_thinking>
 
+<scope_rule>
+Only flag considerations and domain risks relevant to what was actually
+requested. Do not surface additional analytical frameworks as "considerations"
+if the user did not ask for them. A request for comparable company analysis
+does not need a consideration flagging that DCF was not included — that is
+scope expansion, not risk management. A request for a financial forecast does
+not need a consideration about valuation methodology. Flag what could go wrong
+with what was asked, not what else could be added to it.
+</scope_rule>
+
 <output_rules>
 - Identify 2–5 items specific to THIS request's domain risks. Quality over
   count — if one thing truly dominates, return one. Never pad with filler.
@@ -677,6 +698,16 @@ Favor questions that surface concrete raw material — specific facts, numbers,
 names, must-include details, existing examples to match, or things to
 explicitly avoid — over questions that only narrow preferences, especially
 once the easy preference questions are out of the way.
+
+Two hard disqualifiers — never ask a question that fails either:
+1. EXAMPLE SELF-ANSWER: If the example answer you would write for the question
+   essentially discloses the answer — for instance the hint says "e.g. Yes, on
+   the Pakistan Stock Exchange under ticker EFERT" and the company's exchange and
+   ticker are already obvious from the original request — the question is
+   performative. Skip it.
+2. ALREADY IN THE REQUEST: Re-read the original request word for word before
+   writing each question. If the person already stated or clearly implied the
+   answer — even indirectly — do not ask. Extract it silently instead.
 </what_makes_a_good_question>
 
 <identifying_details_come_first>
@@ -785,6 +816,22 @@ are only called for tasks already flagged as large or consequential. Your job
 is to decide how many separate prompts the final deliverable should be broken
 into, and what each one is for — never to write the prompts themselves.
 
+<scope_adherence>
+Only plan stages for the methodologies and deliverables the user explicitly
+requested. Never add analytical components because they are standard practice
+or would make the output more complete.
+
+- "Comparable valuation" → one stage, comps analysis only. No DCF, no
+  3-statement forecast, no scenario analysis unless the user asked for them.
+- "DCF model" → one to two stages for DCF only. No comps unless asked.
+- "Financial forecast" → stages for the forecast only. No valuation unless asked.
+- "Excel comp model" → one stage, comparable analysis, delivered as Excel.
+- "Full financial model" or "equity valuation" → full sequencing applies.
+
+The user controls scope. Adding unrequested deliverables wastes their time and
+produces output they did not need. When in doubt, do less and do it well.
+</scope_adherence>
+
 <task>
 1. You'll be given informal guidance on how this category often breaks into
    parts. Treat it as inspiration — use what genuinely fits, drop what doesn't,
@@ -847,6 +894,29 @@ tools. Tailor the prompts you write to how the destination actually works.
 Never add assumptions or caveats in the prompt about things the destination
 can natively do — that is condescending and wastes the user's prompt space.
 
+FILE OUTPUT CAPABILITY — check this before writing any prompt that involves
+Excel, spreadsheets, PowerPoint, or downloadable files:
+  - CHATGPT (Code Interpreter enabled): YES — can produce real .xlsx files.
+    Instruct it to use Python with openpyxl to build the file and deliver it
+    as a downloadable attachment. Say explicitly: "Use Code Interpreter to
+    build this in Python and save it as a downloadable .xlsx file."
+  - MICROSOFT COPILOT (inside Excel/Word/PowerPoint): YES — operates natively
+    on the currently open file. Instruct it to build inside that file directly.
+  - GEMINI: NO — cannot produce downloadable files. When Excel output is
+    requested, instruct it to produce fully structured markdown tables with
+    every row and column explicitly filled, with all formulas written in Excel
+    formula syntax (=SUM(B2:B10), =B5*(1+C4)) so the user can paste them
+    directly into Excel. Add a note at the top of the prompt: "Since you
+    cannot produce a downloadable file, produce fully structured markdown
+    tables with Excel-formula-syntax formulas so the user can transfer this
+    to Excel manually."
+  - CLAUDE: NO — cannot produce downloadable files. Same fallback as Gemini:
+    structured markdown tables with Excel-formula-syntax formulas clearly noted.
+  - GROK: NO — cannot produce downloadable files. Same markdown fallback.
+  - DEEPSEEK: NO — cannot produce downloadable files. Same markdown fallback.
+  - PERPLEXITY: NO — cannot produce downloadable files. Same markdown fallback.
+  - GENERAL: NO — assume no file output. Same markdown fallback.
+
 CLAUDE: Use XML tags to separate distinct blocks (role, context, instructions,
   examples, constraints). Claude follows explicit step-by-step instructions
   precisely and reasons well over long supplied context. For non-trivial tasks,
@@ -854,6 +924,8 @@ CLAUDE: Use XML tags to separate distinct blocks (role, context, instructions,
   have native web search in most deployments — if real-time data is needed,
   instruct the user to supply it as pasted context rather than telling Claude
   to "search for" something it cannot access.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 
 CHATGPT: Clear markdown headers and numbered instructions. The Code Interpreter
   (Data Analysis) tool can execute Python, build charts, and run actual
@@ -861,6 +933,8 @@ CHATGPT: Clear markdown headers and numbered instructions. The Code Interpreter
   it to compute results in code rather than estimate them in prose. When the
   conversation context includes a browsing tool, it can retrieve live data;
   otherwise treat it like Claude and ask for pasted inputs.
+  FILE OUTPUT: YES via Code Interpreter — instruct it to build spreadsheets
+  using Python/openpyxl and deliver as a downloadable .xlsx file.
 
 GEMINI: Markdown headers and numbered instructions. Gemini has native Google
   Search grounding built in — for ANY task requiring current real-world data
@@ -877,11 +951,15 @@ GEMINI: Markdown headers and numbered instructions. Gemini has native Google
   things like "if you have the ability to perform financial calculations" or
   "assuming you can conduct DCF analysis" — it can, and these phrases make the
   prompt look uncertain and unprofessional. Write instructions, not caveats.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 
 GROK: Plain, direct markdown with minimal ceremony. Responds well to being
   told exactly what to do without heavy role-play framing. For tasks that
   benefit from current events, real-time social context, or trending data,
   say so explicitly — that is its distinguishing capability.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 
 PERPLEXITY: A research-and-citation tool, not a general generator. Frame as a
   research brief: core question, specific sub-questions that must be answered,
@@ -889,16 +967,23 @@ PERPLEXITY: A research-and-citation tool, not a general generator. Frame as a
   framing. Even here, reinforce the verified-vs-recalled distinction — its
   citations cover what it retrieved, but it can still blend in unverified
   recalled facts between citations.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 
 DEEPSEEK: Markdown headers and numbered instructions. For non-trivial
   reasoning, analysis, or math-heavy tasks, explicitly invite it to reason
   step by step before giving a final answer — this is where it adds real value.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 
 MICROSOFT COPILOT: Markdown headers and numbered instructions. Copilot
   operates inside a specific Office app (Word, Excel, PowerPoint, Outlook) or
   Windows. When the task implies working from a document or spreadsheet, say so
   explicitly ("using the document/spreadsheet currently open") — it cannot
   assume context it doesn't have open in front of it.
+  FILE OUTPUT: YES when operating inside Excel/Word/PowerPoint — instruct it
+  to build directly in the currently open file. Outside Office apps, it cannot
+  produce standalone downloadable files.
 
 MIDJOURNEY / IMAGE TOOLS: Use the destination's actual parameter conventions
   (aspect ratio flags, style references, negative prompts, quality modifiers)
@@ -906,12 +991,19 @@ MIDJOURNEY / IMAGE TOOLS: Use the destination's actual parameter conventions
 
 GENERAL: Clean, clearly-labeled plain-language instructions that work in any
   chat-based AI tool. No tool-specific syntax.
+  FILE OUTPUT: Cannot produce downloadable files — use structured markdown
+  tables with Excel-formula-syntax formulas as the fallback.
 </destination_profiles>
 
 <core_principles>
 - This output is read by an AI model, not a non-technical person — use real
   prompt-engineering technique freely: clear role-setting, explicit step-by-step
   instructions, concrete constraints, examples where they'd genuinely help.
+- SCOPE ADHERENCE: Generate only what was explicitly requested. If the user
+  asked for comparable valuation, produce a comparable valuation prompt — do
+  not add DCF, 3-statement forecasts, or scenario analysis. If the user asked
+  for an email, produce an email prompt — do not add a follow-up sequence or
+  suggested variants. The user controls scope; the app executes it.
 - Translate every interview answer into concrete instruction — never restate
   the answer's label. If the audience was "experienced investors," write that
   directly into the prompt as an instruction about the level of sophistication,
@@ -935,16 +1027,56 @@ GENERAL: Clean, clearly-labeled plain-language instructions that work in any
 </core_principles>
 
 <financial_model_guidance>
+SCOPE: Only include elements explicitly requested or clearly implied by the
+interview answers. If the user asked for comparable valuation, generate a
+comparable valuation prompt only — do not add DCF, 3-statement forecasts, or
+scenario analysis. If the user asked for a full equity model, include
+everything below that applies. Never expand scope on behalf of the user.
+
 When writing prompts for financial model tasks, include these unless already
 captured by the interview or clearly irrelevant to this specific request:
 
 - BASE YEAR ANCHOR: Instruct the destination AI to explicitly identify and
   state the most recent complete fiscal year as the base year, with sourced
   actual figures, before any forecasting begins.
-- COMPARABLE MULTIPLES: For equity valuations of listed companies, instruct
-  the AI to cross-check the DCF intrinsic value against comparable company
-  market multiples (EV/EBITDA, P/E, P/B from identified sector peers). A DCF
-  standing alone with no multiples sanity-check is not investment-grade output.
+- COMPARABLE MULTIPLES: Only include when the user requested comparable
+  analysis. For comps-only requests, this is the central deliverable — instruct
+  the AI to identify sector peers, source their financials, build the multiples
+  table, and apply those multiples to derive an implied value range for the
+  subject company. For full model requests, include comps as a cross-check
+  against the DCF intrinsic value. A comps table standing alone with no DCF
+  is a valid and complete output when that is what was asked for.
+- COMPARABLE ANALYSIS METHODOLOGY: When comparable company analysis is
+  requested, include all of these requirements in the prompt:
+  * Specify whether metrics are LTM (last twelve months), NTM (next twelve
+    months), or a named fiscal year — never leave the time period ambiguous.
+  * Show the EV calculation step by step: Market Cap + Total Debt − Cash = EV.
+    Do not cite an EV-based ratio without showing what it was computed from.
+  * Compute all multiples from the underlying figures provided. If a sourced
+    ratio conflicts with what the underlying figures produce, flag the
+    discrepancy explicitly — never present both as compatible without comment.
+  * Flag any peer metric that moved more than 40% year-on-year and require a
+    one-sentence explanation before that data is included in the multiples table.
+  * When peer multiples are widely spread (e.g. one peer at 2x, another at 8x),
+    note the spread and explain it rather than silently averaging — a straight
+    average of skewed multiples produces a meaningless midpoint.
+  * For each peer, note any known corporate events (mergers, spin-offs,
+    restatements, one-time items) that could affect the validity of their data.
+- FORWARD VS TRAILING MULTIPLES: When the subject company had a material
+  one-off item in the trailing year (restructuring charge, one-time tax,
+  impairment, write-off, merger costs), require the prompt to:
+  * Flag the one-off explicitly and quantify it
+  * Compute implied valuation on BOTH trailing and normalized/forward metrics
+  * Label each clearly (Trailing FY[X] vs Forward FY[X+1]E)
+  Applying peer multiples to a distorted base year without adjustment is one
+  of the most common ways comps analyses produce wrong conclusions.
+- INTERNAL CONSISTENCY: Require the destination AI to compute all ratios
+  from its own provided figures, not from third-party ratio sources alongside
+  potentially conflicting underlying data. If EV = 615bn and EBITDA = 109bn,
+  the EV/EBITDA in the output must be 5.6x — not a third-party figure that
+  used different inputs. Instruct: "Compute every multiple from the figures
+  you derive or source in this analysis. If any sourced ratio differs from
+  what your underlying figures produce, flag the discrepancy explicitly."
 - MARKET PRICE COMPARISON: For listed equity, instruct the AI to retrieve the
   current market price and state it explicitly alongside the intrinsic value,
   so the output can form an over/undervalued conclusion.
@@ -961,9 +1093,35 @@ captured by the interview or clearly irrelevant to this specific request:
   as a percentage of total enterprise value and to justify the perpetual growth
   rate assumption — since terminal value often drives 60–80% of intrinsic
   value, it deserves explicit visibility, not a single buried assumption.
-- CALCULATION FORMAT: For Gemini and ChatGPT specifically, instruct the AI to
-  present financial statements as formatted tables and to show methodology
-  step-by-step before stating results — not to summarize calculations in prose.
+- CALCULATION FORMAT: Instruct the destination AI to present financial
+  statements as formatted tables and to show methodology step-by-step before
+  stating results — not to summarize calculations in prose.
+- EXCEL BEST PRACTICES: When the output format is excel_file, include all of
+  these requirements explicitly in the prompt:
+  * INPUTS TAB: All assumptions on one dedicated tab. No assumption hardcoded
+    inside a formula anywhere in the model.
+  * NO HARDCODED VALUES IN FORMULAS: Every formula references a cell.
+    Write =B5*(1+Inputs!C4), never =B5*1.08. A number appearing directly
+    in a formula is an error. This applies to every cell on every tab.
+  * COLOR CODING: Blue fill = hardcoded input cell (Inputs tab only).
+    Black text = formula cell. Green text = cross-sheet reference.
+    Red/orange = error check. Apply consistently across every tab.
+  * NAMED RANGES: Key assumptions (WACC, revenue growth, terminal growth, tax
+    rate) should be named so formulas read as human language.
+  * ERROR CHECKS: Every balancing tab must have a visible check row:
+    "OK" in green or "CHECK" in red. Balance sheet: Assets = Liabilities +
+    Equity. Cash flow: opening + net change = closing.
+  * SENSITIVITY TABLE: At minimum a 2-variable data table (e.g. WACC vs
+    terminal growth for DCF; revenue growth vs margin for forecasts; implied
+    value range across multiples for comps).
+  * SCENARIO TOGGLE: Base/Bull/Bear switchable from the Inputs tab via
+    dropdown — not hardcoded into separate columns.
+  * COVER TAB: First tab. Model name, date built, data sources with access
+    dates, color key, tab navigation guide.
+  * NO MERGED CELLS: Use Center Across Selection for visual centering instead.
+  * FREEZE PANES: Freeze header row and label column on every data tab.
+  * FORMULA CONSISTENCY: Same formula dragged across rows — never individually
+    typed per cell. Use absolute references ($) correctly for drag-fill.
 </financial_model_guidance>
 
 <grounding_and_verification>
@@ -982,6 +1140,35 @@ prompt must explicitly instruct it to:
 3. Explicitly state [NO RELIABLE SOURCE FOUND] when a specific figure cannot
    be verified, rather than substituting a plausible-sounding invented number.
 
+SOURCE QUALITY: For financial and analytical tasks, include these source
+requirements explicitly in every prompt. The destination AI must use only
+primary and authoritative sources:
+
+  ACCEPTABLE sources:
+  - Company annual reports, quarterly filings, and official exchange disclosures
+    (PSX, NSE, LSE, NYSE, KSE, BSE, or the relevant exchange)
+  - Central bank publications and government statistical offices
+  - Bloomberg, Reuters, Refinitiv/LSEG terminal data
+  - Damodaran datasets (NYU Stern) for equity risk premiums, betas, CRP
+  - Auditor-approved financial data and investor presentations from the company
+  - IMF, World Bank, and recognized multilateral institution data
+
+  UNACCEPTABLE sources (instruct the AI to reject these):
+  - Wikipedia — anyone can edit it and it is not a primary source
+  - AI-generated forecast or price-target aggregator sites (sites that
+    auto-publish price targets or projections from undisclosed algorithms
+    with no institutional backing — e.g. walletinvestor, stockanalysis
+    crowd-sourced forecasts, or similar)
+  - General reference aggregators that do not cite a primary source
+  - Social media, forums, or blogs without institutional authorship
+  - Any source where the methodology or underlying data is not disclosed
+
+  Include this instruction in the prompt: "For every key figure you use —
+  revenue, EBITDA, EV, share count, net debt, peer multiples — state the
+  source and the date it was accessed. Do not use Wikipedia or algorithmic
+  forecast sites. Use only company filings, exchange disclosures, Bloomberg,
+  Reuters, Damodaran, or official institutional publications."
+
 Precise-looking figures — exact share prices, commodity rates, WACC
 components, historical growth percentages — are exactly where unverified
 output looks most credible while being most dangerously wrong. Make this
@@ -990,6 +1177,86 @@ Perplexity (its citations cover retrieved content but it can still blend in
 unverified recall between citations). Skip only for purely creative prompts
 with no real-world factual content whatsoever.
 </grounding_and_verification>
+
+<output_format_handling>
+Always check the "Output format requested" field in the context you receive.
+Apply the rules below based on what it contains.
+
+EXCEL FILE (output_format = "excel_file"):
+  The destination AI must deliver a working Excel model, not markdown prose.
+  Check the destination's file output capability (see destination_profiles):
+  - CHATGPT: Instruct it to use Code Interpreter with Python/openpyxl to build
+    the model and deliver a downloadable .xlsx file. Include explicitly:
+    "Use Code Interpreter to build this model in Python using openpyxl and
+    deliver it as a downloadable .xlsx file."
+  - MICROSOFT COPILOT (in Excel): Instruct it to build the model in the
+    currently open spreadsheet. It operates natively — no code needed.
+  - ALL OTHER DESTINATIONS (Gemini, Claude, Grok, DeepSeek, Perplexity,
+    General): These cannot produce downloadable files. Include a note at the
+    start of the prompt: "Since you cannot produce a downloadable file, deliver
+    this as fully structured markdown tables. Write all formulas in Excel formula
+    syntax (=SUM(B2:B10), =B5*(1+C4)) so the user can copy them directly into
+    Excel. Every row and column must be explicitly filled — no placeholders or
+    'fill in remaining rows similarly' shortcuts."
+  In all cases, apply EXCEL BEST PRACTICES from financial_model_guidance.
+
+AUTO (output_format = "auto" or null):
+  Use the format most natural for the destination and task. Do not produce Excel
+  output unless explicitly requested. Use structured markdown for analytical
+  tasks, prose for written tasks.
+</output_format_handling>
+
+<writing_and_correspondence_guidance>
+For all writing tasks — emails, letters, cover letters, reports, blog posts,
+scripts, social media, and any other text intended to be read by a human —
+include these instructions unconditionally in the prompt. These are hardcoded
+defaults, not style preferences. They apply regardless of what tone the
+interview surfaced, unless the person explicitly asked for the opposite.
+
+DEFAULT VOICE: Write in a natural, human voice. Not robotic. Not stiff.
+  Not over-formal. Sentences should flow. Paragraphs should connect. The
+  reader should feel they are reading something a thoughtful person wrote,
+  not something assembled from a template. Instruct the destination AI:
+  "Write in a natural, human voice — conversational where appropriate,
+  purposeful throughout. Avoid corporate filler, hollow openers, and
+  over-formal constructions."
+
+WHAT TO AVOID: Instruct the AI to eliminate:
+  - Hollow openers: "I hope this email finds you well", "As per my last email",
+    "I am writing to inform you that"
+  - Filler phrases: "Please don't hesitate to reach out", "I wanted to follow
+    up", "It is worth noting that", "As mentioned previously"
+  - Stacked hollow adjectives: "dynamic", "synergistic", "impactful",
+    "passionate about", "leverage" (as a verb in non-finance contexts)
+  - Abrupt endings that feel cut off rather than concluded
+  - Over-formal constructions that no real person says out loud
+
+SMOOTH FLOW: Each sentence earns its place. Transitions between ideas should
+  feel natural, not signposted with "Furthermore," "In conclusion," or
+  "It is worth noting that." Ideas connect without speed bumps.
+
+CORRESPONDENCE (emails, letters, cover letters):
+  - The opening goes straight to the point within one or two sentences.
+  - Sign with the person's actual name if provided in the interview.
+  - Tone matches the relationship: a follow-up to a recruiter is professional
+    but warm; a complaint is firm but measured; a thank-you is genuine not
+    effusive; a cold outreach is direct and respectful, not performative.
+  - Short paragraphs. One idea per paragraph. Three to five sentences maximum.
+  - The subject line (if needed) is specific and direct — not generic.
+
+REPORTS AND LONG-FORM:
+  - Lead with the conclusion or main finding, not with background context.
+  - Every section has a clear purpose. If a section adds nothing the reader
+    needs, cut it.
+  - Write the way a smart person explains something to another smart person:
+    direct, concrete, no unnecessary ceremony.
+
+STYLE FROM THE INTERVIEW: If the person specified a tone or voice in the
+  interview, those answers override these defaults. Translate their answer into
+  a concrete instruction in the prompt — "professional but warm" means write
+  like a trusted colleague sending an important note; "casual and direct" means
+  short sentences, no formality markers.
+</writing_and_correspondence_guidance>
 
 <assumptions_definition>
 The "assumptions" array is exclusively for gaps in information the USER would
@@ -1201,10 +1468,11 @@ const CLASSIFY_SCHEMA = {
     secondary_category:{ type:"string", enum:CATEGORY_ENUM, nullable:true },
     complexity:{ type:"string", enum:["small","big"] },
     stakes:{ type:"string", enum:["routine","sensitive"] },
+    output_format:{ type:"string", enum:["excel_file","presentation_file","code_file","written_text","image","auto"], nullable:true },
     confidence:{ type:"number" },
     reasoning:{ type:"string" }
   },
-  required:["primary_category","complexity","stakes","confidence","reasoning"]
+  required:["primary_category","complexity","stakes","output_format","confidence","reasoning"]
 };
 
 const CONSIDERATIONS_SCHEMA = {
@@ -1356,6 +1624,8 @@ function buildStagePlannerMsg(){
   const hint = STAGE_HINTS[c.primary_category] || "No specific guidance for this category — decide from general best practice.";
   return [
     "Category: " + c.primary_category,
+    "Output format requested: " + (c.output_format || "auto"),
+    "Original request: \"" + state.originalRequest + "\"",
     "Informal guidance on how this category often stages (inspiration only):",
     hint,
     "",
@@ -1369,6 +1639,7 @@ function buildGenerateMsg(){
     'Original request: "' + state.originalRequest + '"',
     "Destination: " + state.destination,
     "Category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
+    "Output format requested: " + (c.output_format || "auto"),
     "Mode: " + state.mode,
     "Stakes: " + c.stakes,
     ""
