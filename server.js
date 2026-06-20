@@ -30,13 +30,53 @@ const API_KEYS = [
   process.env.GEMINI_API_KEY_6,
 ].filter(Boolean);
 
+// In-memory key stats — loaded from DB at startup, kept in sync after each call.
+let keyStats = API_KEYS.map((_, i) => ({
+  key_index: i, enabled: true, daily_limit: 500,
+  calls_today: 0, calls_total: 0, error_count_429: 0,
+  last_used_at: null, last_429_at: null,
+  last_reset_date: new Date().toISOString().slice(0, 10)
+}));
 let keyIndex = 0;
 
-async function callWithRotation(model, body) {
-  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
-    const idx = (keyIndex + attempt) % API_KEYS.length;
-    const key = API_KEYS[idx];
+async function loadKeyStats() {
+  if (!supabaseAdmin) return;
+  const { data } = await supabaseAdmin.from("gemini_keys").select("*").order("key_index");
+  if (data && data.length) keyStats = data;
+}
 
+function todayDate() { return new Date().toISOString().slice(0, 10); }
+
+function resetTodayIfNeeded(stat) {
+  const today = todayDate();
+  if (stat.last_reset_date !== today) {
+    stat.calls_today = 0;
+    stat.last_reset_date = today;
+  }
+}
+
+function persistKeyStat(stat) {
+  if (!supabaseAdmin) return;
+  supabaseAdmin.from("gemini_keys").upsert(stat, { onConflict: "key_index" }).then(() => {});
+}
+
+async function callWithRotation(model, body) {
+  const today = todayDate();
+  // Build ordered list of candidate indices starting from keyIndex
+  const candidates = [];
+  for (let i = 0; i < API_KEYS.length; i++) {
+    candidates.push((keyIndex + i) % API_KEYS.length);
+  }
+
+  for (const idx of candidates) {
+    const stat = keyStats[idx];
+    if (!stat) continue;
+    resetTodayIfNeeded(stat);
+    // Skip disabled or over daily limit (0 = unlimited)
+    if (!stat.enabled) continue;
+    if (stat.daily_limit > 0 && stat.calls_today >= stat.daily_limit) continue;
+
+    const key = API_KEYS[idx];
     const upstream = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
@@ -51,17 +91,24 @@ async function callWithRotation(model, body) {
       (data.error && (data.error.code === 429 || (data.error.message || "").includes("quota")));
 
     if (isQuotaError) {
+      stat.error_count_429 = (stat.error_count_429 || 0) + 1;
+      stat.last_429_at = new Date().toISOString();
+      persistKeyStat(stat);
       keyIndex = (idx + 1) % API_KEYS.length;
       continue;
     }
 
+    stat.calls_today = (stat.calls_today || 0) + 1;
+    stat.calls_total = (stat.calls_total || 0) + 1;
+    stat.last_used_at = new Date().toISOString();
+    persistKeyStat(stat);
     keyIndex = idx;
     return { status: upstream.status, data };
   }
 
   return {
     status: 429,
-    data: { error: { message: `All ${API_KEYS.length} API keys have reached their quota. Please try again later (limits reset daily).` } }
+    data: { error: { message: `All API keys are unavailable (disabled or at their daily limit). Try again later or enable more keys in the admin panel.` } }
   };
 }
 
@@ -323,9 +370,42 @@ app.post("/api/admin/users/:id/toggle-admin", requireAdmin, async (req, res) => 
   }
 });
 
+// ─── Admin: Gemini key stats ───────────────────────────────────────────────────
+app.get("/api/admin/keys", requireAdmin, (req, res) => {
+  const rows = keyStats.map(stat => {
+    const key = API_KEYS[stat.key_index] || "";
+    resetTodayIfNeeded(stat);
+    return {
+      key_index: stat.key_index,
+      suffix: key ? "…" + key.slice(-6) : "missing",
+      enabled: stat.enabled,
+      daily_limit: stat.daily_limit,
+      calls_today: stat.calls_today,
+      calls_total: stat.calls_total,
+      error_count_429: stat.error_count_429,
+      last_used_at: stat.last_used_at,
+      last_429_at: stat.last_429_at,
+    };
+  });
+  res.json({ keys: rows });
+});
+
+app.post("/api/admin/keys/:index", requireAdmin, async (req, res) => {
+  const idx = parseInt(req.params.index);
+  const stat = keyStats.find(s => s.key_index === idx);
+  if (!stat) return res.status(404).json({ error: "Key not found" });
+  const { enabled, daily_limit } = req.body;
+  if (enabled !== undefined) stat.enabled = Boolean(enabled);
+  if (daily_limit !== undefined) stat.daily_limit = Math.max(0, parseInt(daily_limit) || 0);
+  persistKeyStat(stat);
+  res.json({ ok: true, stat });
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Draft & Stamp running at http://localhost:${PORT}`);
-  console.log(`API keys loaded: ${API_KEYS.length} (rotation active)`);
-  console.log(`Supabase: ${supabaseAdmin ? "connected" : "not configured — running without auth/DB"}`);
+loadKeyStats().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Draft & Stamp running at http://localhost:${PORT}`);
+    console.log(`API keys loaded: ${API_KEYS.length} (rotation active)`);
+    console.log(`Supabase: ${supabaseAdmin ? "connected" : "not configured — running without auth/DB"}`);
+  });
 });

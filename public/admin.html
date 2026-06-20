@@ -211,11 +211,13 @@
       <button class="tab-btn active" data-tab="runs">Runs</button>
       <button class="tab-btn" data-tab="users">Users</button>
       <button class="tab-btn" data-tab="feedback">Feedback</button>
+      <button class="tab-btn" data-tab="keys">API Keys</button>
     </div>
 
     <div id="tab-runs"><div id="runs-content"></div></div>
     <div id="tab-users" style="display:none;"><div id="users-content"></div></div>
     <div id="tab-feedback" style="display:none;"><div id="feedback-content"></div></div>
+    <div id="tab-keys" style="display:none;"><div id="keys-content"></div></div>
 
   </div>
 </div>
@@ -361,9 +363,11 @@ function setupTabs() {
       document.getElementById("tab-runs").style.display = currentTab === "runs" ? "" : "none";
       document.getElementById("tab-users").style.display = currentTab === "users" ? "" : "none";
       document.getElementById("tab-feedback").style.display = currentTab === "feedback" ? "" : "none";
+      document.getElementById("tab-keys").style.display = currentTab === "keys" ? "" : "none";
       if (currentTab === "runs") loadRuns();
       if (currentTab === "users") loadUsers();
       if (currentTab === "feedback") loadFeedback();
+      if (currentTab === "keys") loadKeys();
     };
   });
 }
@@ -464,6 +468,68 @@ async function loadFeedback() {
   html += `</tbody></table>`;
   html += renderPagination(total, feedbackPage, 20, (p) => { feedbackPage = p; loadFeedback(); });
   el.innerHTML = html;
+}
+
+// ── API Keys tab ──────────────────────────────────────────────────────────────
+async function loadKeys() {
+  const el = document.getElementById("keys-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch("/api/admin/keys");
+  const { keys } = await res.json();
+
+  let html = `<table class="data-table"><thead><tr>
+    <th>#</th><th>Key</th><th>Status</th><th>Today</th><th>Daily Limit</th><th>Total Calls</th><th>429 Errors</th><th>Last Used</th><th>Last 429</th><th>Actions</th>
+  </tr></thead><tbody>`;
+
+  keys.forEach(k => {
+    const limitDisplay = k.daily_limit === 0 ? "Unlimited" : k.daily_limit;
+    const todayPct = (k.daily_limit > 0) ? Math.min(100, Math.round(k.calls_today / k.daily_limit * 100)) : null;
+    const barColor = todayPct >= 90 ? "#c0392b" : todayPct >= 70 ? "#e67e22" : "#27ae60";
+    const barHtml = todayPct !== null
+      ? `<div style="background:#333;border-radius:3px;height:6px;width:80px;margin-top:4px;"><div style="background:${barColor};height:6px;border-radius:3px;width:${todayPct}%;"></div></div>`
+      : "";
+    const statusBadge = k.enabled
+      ? '<span class="badge badge-up" style="background:#1a3a2a;color:#4caf50;border:1px solid #4caf50;">ON</span>'
+      : '<span class="badge badge-down" style="background:#3a1a1a;color:#e74c3c;border:1px solid #e74c3c;">OFF</span>';
+
+    html += `<tr>
+      <td class="mono">${k.key_index + 1}</td>
+      <td class="mono">${esc(k.suffix)}</td>
+      <td>${statusBadge}</td>
+      <td>${k.calls_today}${barHtml}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" min="0" value="${k.daily_limit}" id="limit-${k.key_index}"
+            style="width:70px;background:#1e1e1e;border:1px solid #444;color:#fff;padding:4px 6px;border-radius:4px;font-size:0.85rem;">
+          <span style="color:var(--text-dim);font-size:0.8rem;">(0=∞)</span>
+        </div>
+      </td>
+      <td>${k.calls_total}</td>
+      <td style="color:${k.error_count_429 > 0 ? "#e74c3c" : "inherit"}">${k.error_count_429}</td>
+      <td class="mono" style="font-size:0.78rem;">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : "—"}</td>
+      <td class="mono" style="font-size:0.78rem;color:${k.last_429_at ? "#e74c3c" : "inherit"}">${k.last_429_at ? new Date(k.last_429_at).toLocaleString() : "—"}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="expand-btn" onclick="toggleKey(${k.key_index}, ${!k.enabled})">${k.enabled ? "Disable" : "Enable"}</button>
+        <button class="expand-btn" onclick="saveLimit(${k.key_index})">Save limit</button>
+      </td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>
+    <p style="color:var(--text-dim);font-size:0.82rem;margin-top:12px;">Daily limit resets at midnight. Set to 0 for unlimited. Disabled keys are skipped entirely.</p>`;
+  el.innerHTML = html;
+}
+
+async function toggleKey(idx, enabled) {
+  await adminFetch(`/api/admin/keys/${idx}`, { method: "POST", body: JSON.stringify({ enabled }) });
+  loadKeys();
+}
+
+async function saveLimit(idx) {
+  const input = document.getElementById(`limit-${idx}`);
+  const daily_limit = parseInt(input.value) || 0;
+  await adminFetch(`/api/admin/keys/${idx}`, { method: "POST", body: JSON.stringify({ daily_limit }) });
+  loadKeys();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
