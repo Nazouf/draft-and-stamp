@@ -1413,6 +1413,14 @@ function closeLogin(){
   document.getElementById("auth-overlay").style.display = "none";
 }
 
+function authMsg(err){
+  // Supabase returns "{}" when email enumeration protection hides the real error.
+  // We also guard against undefined/object messages just in case.
+  const msg = err && typeof err.message === "string" ? err.message.trim() : "";
+  if (!msg || msg === "{}" || msg === "[]") return "Check your email and password and try again.";
+  return msg;
+}
+
 async function signInWithEmail(){
   if (!sbClient || authLoading) return;
   const emailEl = document.getElementById("auth-email");
@@ -1424,7 +1432,7 @@ async function signInWithEmail(){
   authLoading = true; authError = null; refreshAuth();
   const { error } = await sbClient.auth.signInWithPassword({ email, password });
   authLoading = false;
-  if (error){ authError = error.message; refreshAuth(); }
+  if (error){ authError = authMsg(error); refreshAuth(); }
   // Success: onAuthStateChange fires, sets currentUser, calls renderAll()
 }
 
@@ -1440,8 +1448,8 @@ async function signUpWithEmail(){
   authLoading = true; authError = null; refreshAuth();
   const { error } = await sbClient.auth.signUp({ email, password });
   authLoading = false;
-  if (error){ authError = error.message; refreshAuth(); }
-  else { authSuccess = "Check your email to confirm, then sign in."; authMode = "signin"; refreshAuth(); }
+  if (error){ authError = authMsg(error); refreshAuth(); }
+  else { authSuccess = "Check your email to confirm your account, then sign in."; authMode = "signin"; refreshAuth(); }
 }
 
 async function signOut(){
