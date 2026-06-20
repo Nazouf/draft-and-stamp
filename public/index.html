@@ -278,8 +278,11 @@
   .check-box{width:18px;height:18px;border:1.5px solid var(--paper-line);border-radius:3px;flex:0 0 auto;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--red);font-weight:700;}
   .check-box.on{border-color:var(--red);background:#F8EFE8;}
   .slider-row{margin:14px 0;}
-  .slider-labels{display:flex;justify-content:space-between;font-size:0.8rem;color:var(--muted);margin-bottom:6px;}
-  input[type=range]{width:100%;accent-color:var(--red);}
+  .slider-live{text-align:center;margin:10px 0 4px;}
+  .slider-live-num{font-family:'Fraunces',serif;font-size:2.8rem;font-weight:700;color:var(--ink);line-height:1;}
+  .slider-live-sub{font-size:0.78rem;color:var(--muted);margin-top:2px;}
+  .slider-labels{display:flex;justify-content:space-between;font-size:0.8rem;color:var(--muted);margin:10px 0 6px;}
+  input[type=range]{width:100%;accent-color:var(--red);cursor:pointer;}
   .custom-toggle{
     margin-top:14px;background:none;border:none;color:var(--red);font-size:0.84rem;
     cursor:pointer;text-decoration:underline;padding:0;display:block;
@@ -456,7 +459,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.5.1
+    &nbsp;·&nbsp; v1.5.2
   </div>
 </div>
 
@@ -2190,8 +2193,12 @@ function renderOptionInput(q){
     const lo = (q.options && q.options[0] && q.options[0].label) || "Less";
     const hi = (q.options && q.options[q.options.length-1] && q.options[q.options.length-1].label) || "More";
     return '<div class="slider-row">' +
-      '<div class="slider-labels"><span>' + esc(lo) + '</span><span>' + esc(hi) + '</span></div>' +
+      '<div class="slider-live">' +
+        '<div class="slider-live-num" id="slider-live-num">50</div>' +
+        '<div class="slider-live-sub">out of 100 — drag to adjust</div>' +
+      '</div>' +
       '<input type="range" id="slider-input" min="0" max="100" value="50">' +
+      '<div class="slider-labels"><span>' + esc(lo) + '</span><span>' + esc(hi) + '</span></div>' +
     '</div>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="submit-slider">Continue</button></div>' +
     renderCustomToggle(q);
@@ -2550,6 +2557,10 @@ document.getElementById("app").addEventListener("input", function(e){
   if (e.target.id === "request-input") state.originalRequest = e.target.value;
   else if (e.target.id === "free-text-input") state.freeTextDraft = e.target.value;
   else if (e.target.id === "fb-comment") state.feedbackComment = e.target.value;
+  else if (e.target.id === "slider-input") {
+    const num = document.getElementById("slider-live-num");
+    if (num) num.textContent = e.target.value;
+  }
 });
 
 document.getElementById("app").addEventListener("click", function(e){
