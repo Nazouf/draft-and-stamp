@@ -299,15 +299,13 @@ function showNotAdmin() {
 
 function renderStats() {
   const s = statsData;
-  const total = s.thumbsUp + s.thumbsDown;
-  const pct = total ? Math.round(s.thumbsUp / total * 100) : null;
   document.getElementById("stats-grid").innerHTML = [
     { value: s.totalRuns, label: "Total runs" },
     { value: s.runsToday, label: "Runs today" },
     { value: s.activeUsers7d, label: "Active users (7d)" },
-    { value: s.thumbsUp, label: "👍 Positive feedback" },
-    { value: s.thumbsDown, label: "👎 Negative feedback" },
-    { value: pct !== null ? pct + "%" : "—", label: "Satisfaction rate" },
+    { value: s.avgRating !== null ? s.avgRating + " / 10" : "—", label: "Avg prompt rating" },
+    { value: s.avgResultsRating !== null ? s.avgResultsRating + " / 10" : "—", label: "Avg results rating" },
+    { value: s.feedbackCount || 0, label: "Feedback submissions" },
   ].map(c =>
     `<div class="stat-card"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`
   ).join("");
@@ -452,11 +450,12 @@ async function loadFeedback() {
   if (!feedback.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">No feedback yet.</div>'; return; }
 
   let html = `<table class="data-table"><thead><tr>
-    <th>Rating</th><th>Comment</th><th>Run</th><th>Time</th>
+    <th>Prompt</th><th>Results</th><th>Comment</th><th>Run</th><th>Time</th>
   </tr></thead><tbody>`;
   feedback.forEach(f => {
     html += `<tr>
-      <td>${f.rating === 1 ? '<span class="badge badge-up">👍 Up</span>' : '<span class="badge badge-down">👎 Down</span>'}</td>
+      <td>${f.rating != null ? f.rating + " / 10" : '<span style="color:var(--text-dim);">—</span>'}</td>
+      <td>${f.results_rating != null ? f.results_rating + " / 10" : '<span style="color:var(--text-dim);">—</span>'}</td>
       <td>${f.comment ? esc(f.comment) : '<span style="color:var(--text-dim);">—</span>'}</td>
       <td><button class="expand-btn" onclick="openRunModal('${f.run_id}')">View run</button></td>
       <td class="mono">${new Date(f.created_at).toLocaleString()}</td>

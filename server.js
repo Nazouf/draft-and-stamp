@@ -164,12 +164,11 @@ app.post("/api/gemini", async (req, res) => {
 // ─── Admin: stats ──────────────────────────────────────────────────────────────
 app.get("/api/admin/stats", requireAdmin, async (req, res) => {
   try {
-    const [totalRuns, runsToday, thumbsUp, thumbsDown, unrestricted] = await Promise.all([
+    const [totalRuns, runsToday, feedbackAvgs, unrestricted] = await Promise.all([
       supabaseAdmin.from("runs").select("id", { count: "exact", head: true }),
       supabaseAdmin.from("runs").select("id", { count: "exact", head: true })
         .gte("created_at", new Date(Date.now() - 86400000).toISOString()),
-      supabaseAdmin.from("feedback").select("id", { count: "exact", head: true }).eq("rating", 1),
-      supabaseAdmin.from("feedback").select("id", { count: "exact", head: true }).eq("rating", -1),
+      supabaseAdmin.from("feedback").select("rating, results_rating"),
       getUnrestrictedMode()
     ]);
 
@@ -189,12 +188,17 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
       if (r.destination) destCounts[r.destination] = (destCounts[r.destination] || 0) + 1;
     });
 
+    const fbRows = feedbackAvgs.data || [];
+    const avgRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.rating || 0), 0) / fbRows.length).toFixed(1) : null;
+    const avgResultsRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.results_rating || 0), 0) / fbRows.length).toFixed(1) : null;
+
     res.json({
       totalRuns: totalRuns.count || 0,
       runsToday: runsToday.count || 0,
       activeUsers7d: uniqueUsers,
-      thumbsUp: thumbsUp.count || 0,
-      thumbsDown: thumbsDown.count || 0,
+      avgRating,
+      avgResultsRating,
+      feedbackCount: fbRows.length,
       categoryCounts,
       destCounts,
       unrestrictedMode: unrestricted
@@ -274,7 +278,7 @@ app.get("/api/admin/feedback", requireAdmin, async (req, res) => {
   try {
     const { data, count, error } = await supabaseAdmin
       .from("feedback")
-      .select("id, created_at, rating, comment, run_id, user_id", { count: "exact" })
+      .select("id, created_at, rating, results_rating, comment, run_id, user_id", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;
