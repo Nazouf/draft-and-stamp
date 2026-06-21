@@ -427,6 +427,25 @@
     cursor:pointer;margin-top:14px;font-family:inherit;text-align:center;
   }
   .auth-toggle:hover{color:var(--ink);}
+  /* ── History screen ─────────────────────────────────────────── */
+  .history-header{margin-bottom:20px;}
+  .history-title{font-size:1.35rem;font-weight:700;margin:0 0 3px;font-family:'Fraunces',serif;}
+  .history-sub{color:var(--muted);font-size:0.86rem;margin:0;}
+  .history-empty{color:var(--muted);font-size:0.95rem;text-align:center;padding:48px 0;}
+  .history-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .history-card{background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:8px;overflow:hidden;}
+  .history-card-top{padding:13px 15px;cursor:pointer;user-select:none;}
+  .history-card-top:hover{background:#ebe5d5;}
+  .history-card-meta{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap;}
+  .history-dest-chip{background:var(--ink);color:#ECE6D6;font-size:0.7rem;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.03em;text-transform:uppercase;}
+  .history-cat-chip{background:var(--paper-line);color:var(--ink);font-size:0.7rem;font-weight:500;padding:2px 7px;border-radius:4px;text-transform:capitalize;}
+  .history-date{color:var(--muted);font-size:0.76rem;margin-left:auto;}
+  .history-card-request{font-size:0.9rem;color:var(--ink);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;}
+  .history-card-toggle{font-size:0.76rem;color:var(--muted);font-weight:500;}
+  .history-card-prompts{border-top:1px solid var(--paper-line);padding:14px 15px;display:flex;flex-direction:column;gap:16px;}
+  .history-prompt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .history-prompt-label{font-size:0.86rem;font-weight:600;color:var(--ink);}
+  .history-prompt-purpose{font-size:0.8rem;color:var(--muted);margin-bottom:8px;}
 </style>
 </head>
 <body>
@@ -443,7 +462,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.7.2
+    &nbsp;·&nbsp; v1.8.0
   </div>
 </div>
 
@@ -1550,6 +1569,13 @@ function freshState(){
 }
 let state = freshState();
 
+// History screen state — outside freshState() so startOver() doesn't clear it
+let historyRuns = [];
+let historyPage = 0;
+let historyTotal = 0;
+let historyLoading = false;
+let historyExpanded = new Set();
+
 function logUsage(step, model, usage){
   state.usageEvents.push({step, model, input_tokens:usage.input_tokens||0, output_tokens:usage.output_tokens||0});
 }
@@ -2046,6 +2072,97 @@ function esc(s){
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+async function loadHistory(pageNum){
+  historyLoading = true;
+  if (pageNum === 0){ historyRuns = []; historyExpanded = new Set(); }
+  state.screen = "history";
+  renderAll();
+  try{
+    const session = await sbClient.auth.getSession();
+    const token = session.data.session && session.data.session.access_token;
+    const resp = await fetch("/api/runs?page=" + pageNum, {
+      headers: token ? { "Authorization": "Bearer " + token } : {}
+    });
+    const json = await resp.json();
+    if (pageNum === 0) historyRuns = json.runs || [];
+    else historyRuns = historyRuns.concat(json.runs || []);
+    historyPage = pageNum;
+    historyTotal = json.total || 0;
+  } catch(e){ console.error("loadHistory:", e); }
+  historyLoading = false;
+  renderAll();
+}
+
+function renderHistory(){
+  if (historyLoading && historyRuns.length === 0){
+    return renderLoading("Loading your prompts…");
+  }
+  const destLabels = {
+    claude:"Claude",chatgpt:"ChatGPT",gemini:"Gemini",grok:"Grok",
+    perplexity:"Perplexity",deepseek:"DeepSeek",copilot:"Copilot",
+    midjourney:"Midjourney",general:"General"
+  };
+  let html = '<div class="history-header">' +
+    '<h2 class="history-title">My Prompts</h2>' +
+    '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + " saved" : "Your saved prompts appear here") + '</p>' +
+  '</div>';
+
+  if (!historyLoading && historyRuns.length === 0){
+    html += '<div class="history-empty">No runs yet — start drafting to see your history here.</div>';
+    html += '<div class="btn-row"><button class="btn" data-action="start-over">Start drafting</button></div>';
+    return html;
+  }
+
+  html += '<div class="history-list">';
+  historyRuns.forEach(function(run){
+    const isExpanded = historyExpanded.has(run.id);
+    const d = new Date(run.created_at);
+    const dateStr = d.toLocaleDateString("en-US",{day:"numeric",month:"short",year:"numeric"});
+    const timeStr = d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+    const dest = run.destination || "general";
+    const destLabel = destLabels[dest] || dest;
+    const category = (run.category || "").replace(/_/g," ");
+    const prompts = (run.generated_prompts && run.generated_prompts.prompts) ? run.generated_prompts.prompts : [];
+    const promptCount = prompts.length;
+
+    html += '<div class="history-card">' +
+      '<div class="history-card-top" data-action="history-expand" data-value="' + esc(run.id) + '">' +
+        '<div class="history-card-meta">' +
+          '<span class="history-dest-chip">' + esc(destLabel) + '</span>' +
+          (category ? '<span class="history-cat-chip">' + esc(category) + '</span>' : '') +
+          '<span class="history-date">' + esc(dateStr) + ' · ' + esc(timeStr) + '</span>' +
+        '</div>' +
+        '<div class="history-card-request">' + esc(run.request || "") + '</div>' +
+        '<div class="history-card-toggle">' + (isExpanded ? '↑ Collapse' : '↓ Show ' + (promptCount === 1 ? '1 prompt' : promptCount + ' prompts')) + '</div>' +
+      '</div>';
+
+    if (isExpanded && promptCount){
+      html += '<div class="history-card-prompts">';
+      prompts.forEach(function(p, i){
+        html += '<div>' +
+          '<div class="history-prompt-head">' +
+            '<div class="history-prompt-label">' + esc(p.label) + '</div>' +
+            '<button class="btn btn-small prompt-copy-btn" data-action="history-copy" data-run="' + esc(run.id) + '" data-pidx="' + i + '">Copy</button>' +
+          '</div>' +
+          (p.purpose ? '<div class="history-prompt-purpose">' + esc(p.purpose) + '</div>' : '') +
+          '<div class="output-block"><pre class="output-text" id="hprompt-' + esc(run.id) + '-' + i + '">' + esc(p.content) + '</pre></div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  if (historyRuns.length < historyTotal){
+    html += '<div class="btn-row" style="justify-content:center;margin-bottom:4px;">' +
+      '<button class="btn" data-action="history-load-more">' + (historyLoading ? 'Loading…' : 'Load more') + '</button>' +
+    '</div>';
+  }
+  html += '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>';
+  return html;
+}
+
 function renderTopbar(){
   if (!currentUser){
     document.getElementById("topbar-right").innerHTML = '';
@@ -2055,6 +2172,7 @@ function renderTopbar(){
   if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
   html += '<span class="chip">' + esc(currentUser.email) + '</span>';
   if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:6px 14px;font-size:0.82rem;text-decoration:none;">Admin</a>';
+  html += '<button class="link-btn" data-action="show-history">My prompts</button>';
   html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
   html += '<button class="link-btn" data-action="start-over">Start over</button>';
   document.getElementById("topbar-right").innerHTML = html;
@@ -2422,6 +2540,7 @@ function renderAll(){
     case "staged": body = renderStaged(); break;
     case "generating_loading": body = renderLoading("Writing your prompt…"); break;
     case "result": body = renderResult(); break;
+    case "history": body = renderHistory(); break;
     default: body = renderStart();
   }
   app.innerHTML = body + renderErrorBanner();
@@ -2623,6 +2742,21 @@ document.getElementById("app").addEventListener("click", function(e){
       authError = null; authSuccess = null;
       refreshAuth();
       break;
+    case "show-history": loadHistory(0); break;
+    case "history-expand": {
+      const rid = el.dataset.value;
+      if (historyExpanded.has(rid)) historyExpanded.delete(rid); else historyExpanded.add(rid);
+      renderAll();
+      break;
+    }
+    case "history-copy": {
+      const run = historyRuns.find(function(r){ return r.id === el.dataset.run; });
+      const idx = parseInt(el.dataset.pidx, 10);
+      const p = run && run.generated_prompts && run.generated_prompts.prompts && run.generated_prompts.prompts[idx];
+      if (p) copyTextToClipboard(p.content).then(function(){ flashCopied(el); }).catch(function(){ flashCopyFailed(el); });
+      break;
+    }
+    case "history-load-more": loadHistory(historyPage + 1); break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
     case "rating-prompt":  setPromptRating(parseInt(el.dataset.v, 10));  break;
@@ -2639,6 +2773,7 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   if (el.dataset.action === "start-over") startOver();
   else if (el.dataset.action === "open-login") openLogin();
   else if (el.dataset.action === "sign-out") signOut();
+  else if (el.dataset.action === "show-history") loadHistory(0);
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){

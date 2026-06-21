@@ -208,6 +208,26 @@ app.post("/api/gemini", async (req, res) => {
   }
 });
 
+// ─── User: own run history ─────────────────────────────────────────────────────
+app.get("/api/runs", async (req, res) => {
+  const user = await verifyUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  const page = Math.max(0, parseInt(req.query.page || "0"));
+  const limit = 12;
+  try {
+    const { data, count, error } = await supabaseAdmin
+      .from("runs")
+      .select("id, created_at, request, destination, category, complexity, generated_prompts", { count: "exact" })
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(page * limit, (page + 1) * limit - 1);
+    if (error) throw error;
+    res.json({ runs: data || [], total: count || 0, page, limit });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Admin: stats ──────────────────────────────────────────────────────────────
 app.get("/api/admin/stats", requireAdmin, async (req, res) => {
   try {
