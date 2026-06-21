@@ -551,7 +551,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.19.0
+    &nbsp;·&nbsp; v1.19.1
   </div>
 </div>
 
@@ -573,7 +573,10 @@
    trigger rules. The model decides what actually applies.
    ===================================================================== */
 const TOPIC_SEEDS = {
-  writing: ["the real names of any people, companies, or titles involved — or whether to use placeholders",
+  writing: [
+    "for correspondence (cover letters, formal letters, business emails, client proposals): the sender's full name to sign the letter, plus any contact details to include in the signature — phone number, LinkedIn URL, email address",
+    "for cover letters and job applications specifically: real certifications, courses, or credentials the applicant holds; specific named companies or projects they have worked on; concrete achievements or results from those experiences; and what specifically draws them to this company or role — without these the output is a generic template",
+    "the real names of any people, companies, or titles involved — or whether to use placeholders",
     "who will read it and what relationship the writer has with them — close colleague, hiring manager, a company they've never contacted, a recruiter, etc.",
     "the feel or voice — formal and polished, warm and conversational, direct and brief, friendly but professional, or something in between",
     "how long it should be",
@@ -625,7 +628,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.19.0";
+const APP_VERSION  = "v1.19.1";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -668,11 +671,20 @@ any prompts, questions, or advice — only this classification.
      explicitly comprehensive ("full," "complete," "detailed," "from scratch");
      involves a multi-year forecast, equity valuation, or DCF analysis; or would
      take a professional several hours to do well.
-     EXCEPTION — single-output writing tasks (emails, cover letters, letters,
-     blog posts, social posts, scripts) are always "small" regardless of stakes
-     or audience. A cover letter sent to an employer is small. A client pitch
-     email is small. Complexity is about structural multi-stage work, not about
-     how important the output is. Stakes is a separate axis — use it for that.
+     EXCEPTION — simple content writing (tweets, social media posts,
+     one-paragraph announcements, brief casual emails under ~100 words) is
+     always "small" regardless of topic or stakes.
+     DO NOT apply this exception to correspondence that requires the sender's
+     real name, credentials, specific achievements, or company-specific
+     reasoning — without those it produces a placeholder template, not a
+     usable output. Cover letters, formal letters, client proposals, and
+     substantive business emails belong on the normal big/small axis. A
+     competitive cover letter is typically "big" because the interview must
+     collect: sender's name, real certifications, actual achievements with
+     specifics, and company-specific motivation — typically 4-6 critical
+     questions — before the output becomes more than a generic draft.
+     Complexity is about structural multi-stage work, not importance.
+     Stakes is a separate axis — use it for that.
    - "small" otherwise. Judge by implication, not word count.
 4. Separately, decide stakes — NOT the same axis as complexity. Three levels:
 
@@ -1085,21 +1097,34 @@ WRITING (legal, employment, contracts): If not already stated — (1) which
 country/jurisdiction? Legal writing that ignores jurisdiction is potentially
 wrong. Ask this before anything about tone or length.
 
+WRITING (cover letters, job applications, formal letters, client proposals,
+substantive business emails): If not already stated — (1) the sender's full
+name (to sign the output — without this the letter ends with a placeholder);
+(2) any real certifications, credentials, or named experiences relevant to
+the role or topic — without these the output invents brackets like
+[certification name]; (3) specific achievements or results from their
+background that should be highlighted. These are critical, not preferences —
+ask them before tone, length, or style.
+
 Skip any must-ask if the original request already answered it clearly.
 </category_must_ask>
 
 <how_deep_to_go>
-- For "small" tasks: resolve all critical questions first (1-3 is typical),
-  then ask 1 enrichment question max before stopping. Don't pad — stopping
-  after critical questions are answered is correct, not a shortcut.
-- For "big" tasks: resolve all critical questions (3-5 typical), then ask
-  at most 2 enrichment questions before stopping. 6-7 total is the ceiling
-  for big tasks; 8+ is always too many regardless of how much more could
-  theoretically be asked. Stopping at 6 total on a complex task is correct,
-  not a shortcut — the generate step handles minor gaps well.
-- Regardless of complexity: stop the moment additional questions would stop
-  materially changing the output. Never ask an enrichment question if a
-  critical one remains unresolved.
+Critical questions have no fixed count cap. Ask every critical question
+that is genuinely unanswered — the right number is however many critical
+gaps actually exist, not a preset limit. A cover letter needs the sender's
+name, real certifications, specific achievements, and company-specific
+motivation — all critical, all must be asked even if that's 5 or 6
+questions. A tweet needs none of these. Let the task's actual fact
+requirements dictate, not an arbitrary number.
+
+Enrichment questions are where the budget applies:
+- Small tasks: at most 1 enrichment question after all critical ones are done.
+- Big tasks: at most 2 enrichment questions after all critical ones are done.
+
+Stop the moment additional questions would not materially change the
+output. Never ask an enrichment question while a critical one remains
+unresolved.
 </how_deep_to_go>
 
 <question_budget>
@@ -2202,10 +2227,10 @@ function buildSelectQuestionMsg(forceTopic){
     ...(function(){
       const n = state.qaHistory.length;
       const isBig = c.complexity === "big";
-      const criticalDone = isBig ? 5 : 3;
-      const hardCap = isBig ? 7 : 5;
-      if (n >= hardCap) return ["BUDGET WARNING: " + n + " questions asked on a " + c.complexity + " task. Hard ceiling is ~" + hardCap + " total. You MUST set action to \"complete\" unless a CRITICAL (not enrichment) question is genuinely still unanswered. If none: stop now."];
-      if (n >= criticalDone) return ["Note: " + n + " questions asked. Critical phase should be complete. Any further question must be enrichment only — and only 1 more is allowed for small tasks, 2 more for big tasks."];
+      const enrichmentStart = isBig ? 5 : 4;
+      const hardCap = isBig ? 12 : 9;
+      if (n >= hardCap) return ["BUDGET WARNING: " + n + " questions asked. Hard ceiling reached. You MUST set action to \"complete\" unless a CRITICAL question is genuinely still unanswered and its absence would produce placeholder output. If no critical gaps remain: stop now."];
+      if (n >= enrichmentStart) return ["Note: " + n + " questions asked. If all critical questions are resolved, enrichment cap applies — max 1 more enrichment question for small tasks, 2 for big. If critical questions are still unanswered (e.g. sender's name, real achievements, certifications), continue asking them — critical questions are never capped by count."];
       return [];
     })(),
     ...(c.contradictions && c.contradictions.length ? ["", "Contradictions detected in original request (resolve early):", JSON.stringify(c.contradictions)] : []),
