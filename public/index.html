@@ -551,7 +551,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.19.1
+    &nbsp;·&nbsp; v1.20.0
   </div>
 </div>
 
@@ -576,6 +576,8 @@ const TOPIC_SEEDS = {
   writing: [
     "for correspondence (cover letters, formal letters, business emails, client proposals): the sender's full name to sign the letter, plus any contact details to include in the signature — phone number, LinkedIn URL, email address",
     "for cover letters and job applications specifically: real certifications, courses, or credentials the applicant holds; specific named companies or projects they have worked on; concrete achievements or results from those experiences; and what specifically draws them to this company or role — without these the output is a generic template",
+    "for marketing copy or ads: the single most important message or claim; what action the reader should take; and where this will appear (website hero, email subject line, paid ad, product packaging, social caption)",
+    "for social media: which platform — LinkedIn, Instagram, X/Twitter, TikTok — each has a very different optimal length, tone, and structure",
     "the real names of any people, companies, or titles involved — or whether to use placeholders",
     "who will read it and what relationship the writer has with them — close colleague, hiring manager, a company they've never contacted, a recruiter, etc.",
     "the feel or voice — formal and polished, warm and conversational, direct and brief, friendly but professional, or something in between",
@@ -583,7 +585,8 @@ const TOPIC_SEEDS = {
     "whether it should end with a specific call to action or next step",
     "facts, numbers, or specific details that must be included",
     "existing writing (yours or someone else's) to match the style of",
-    "anything it should avoid saying, or any tone it should not take"],
+    "anything it should avoid saying, or any tone it should not take",
+  ],
   financial_model: [
     "what the model is actually for — internal budget, investor pitch, equity valuation, M&A diligence, lender presentation, or personal planning",
     "whether this is for a specific real company — if so, whether it is publicly listed, on which exchange, and the ticker symbol",
@@ -599,21 +602,88 @@ const TOPIC_SEEDS = {
     "growth assumptions, risk factors, and whether best/base/worst-case scenario analysis is required",
     "capital structure details — significant existing debt, recent equity raises, convertible instruments, or planned capex",
     "the regulatory and accounting framework — which country, which reporting standard (IFRS, US GAAP, local GAAP), listed vs private requirements",
+    "whether sensitivity tables or scenario toggles (e.g. bear/base/bull) are needed, and if so which variables to stress",
   ],
-  code: ["language or tool, if they already have one in mind", "a concrete example input and the output they'd want back",
-    "whether this gets used once or relied on repeatedly", "messy edge cases it should handle without breaking",
-    "anything it needs to connect to or read from", "how much it needs to scale or handle at once"],
-  image: ["the main subject and composition", "art style or medium", "mood, lighting, or color palette",
-    "aspect ratio or where the image will be used", "specific things to avoid in the image",
-    "a reference image or artist/style to lean toward"],
-  research: ["how deep vs. broad the answer should be", "what they already know, so it doesn't over-explain basics",
-    "what it's actually for (a decision, learning, something they're writing)",
-    "whether specific sources or types of evidence matter", "any sub-questions that absolutely must be answered"],
-  presentation: ["who's in the room and the occasion", "roughly how many slides",
-    "the one thing the audience should walk away remembering", "how dense each slide should be",
-    "data, charts, or visuals that need to be included", "whether it'll be presented live or read on its own"],
-  other: ["what success looks like for this", "who it's actually for", "constraints or things to avoid",
-    "how much detail is wanted"]
+  code: [
+    "the programming language, framework, or tool — if they already have one in mind",
+    "a concrete example: what goes in, and exactly what should come out",
+    "whether this runs once or is relied on repeatedly — affects how robust it needs to be",
+    "what AI tool or environment will run this — ChatGPT code interpreter, Claude Artifacts, a local IDE, a production server — different environments have different available libraries",
+    "messy edge cases it should handle without breaking — empty inputs, large volumes, unexpected formats",
+    "anything it needs to connect to, read from, or write to — APIs, files, databases, other services",
+    "what should happen when something goes wrong — error messages, silent fallback, retry, or crash loudly",
+    "scale and performance requirements — runs on one file vs millions of rows, latency-sensitive or batch",
+  ],
+  image: [
+    "which image generation tool — Midjourney, DALL-E, Stable Diffusion, Flux, Ideogram, Adobe Firefly — each has different syntax, strengths, and prompt conventions",
+    "the main subject and what's happening in the scene",
+    "art style or medium — photorealistic, oil painting, flat illustration, anime, 3D render, watercolor, etc.",
+    "mood, lighting, and color palette",
+    "aspect ratio and where the image will be used — social post, website banner, print, wallpaper",
+    "specific things to avoid in the image — elements, styles, or visual treatments to exclude",
+    "a reference image, artist, or specific style to lean toward",
+    "whether this is for commercial use — some tools have licensing restrictions that affect how the prompt should be framed",
+  ],
+  research: [
+    "output format — a bulleted summary, a narrative essay, a comparison table, an executive brief, or raw notes to work from",
+    "how deep vs. broad — one topic in depth, or a broad landscape scan",
+    "what they already know, so the AI doesn't over-explain basics they're past",
+    "what this is actually for — making a decision, learning for the first time, writing something, preparing for a meeting",
+    "recency requirements — must draw on sources from the last X years, or are foundational/timeless principles fine?",
+    "whether specific sources, methodologies, or types of evidence matter",
+    "how to handle uncertainty or conflicting information — flag it explicitly, present the dominant view, or lay out both sides",
+    "any sub-questions that absolutely must be answered",
+  ],
+  presentation: [
+    "who's in the room and the occasion — internal team, external investors, a client, a conference audience",
+    "roughly how many slides",
+    "the single most important thing the audience should walk away remembering",
+    "how dense each slide should be — one idea per slide with lots of white space, or detailed reference slides",
+    "data, charts, or visuals that need to be included",
+    "whether it'll be presented live (with speaker narration) or sent to be read on its own",
+    "whether speaker notes should be written out in full or just bullet points",
+    "software target — PowerPoint, Google Slides, or Keynote — affects formatting language in the prompt",
+    "any brand, color, or style guidelines to follow",
+  ],
+  video: [
+    "is this a prompt for an AI video generation tool (Sora, Runway, Kling, Pika, Luma, Veo) or a script for a human to record (YouTube, TikTok, Reels, podcast, explainer, ad)?",
+    "for AI video generation: the main subject and what action or motion is happening; camera movement (static, pan left/right, tracking shot, zoom in/out, dolly, aerial); duration in seconds; lighting and time of day; visual style (cinematic, lo-fi, animation, documentary, hyper-real, stylized); anything that should NOT appear",
+    "for video scripts: the hook — what should stop someone from scrolling in the first 3 seconds; the core message or story arc; the call to action at the end; approximate duration or word count",
+    "for YouTube or long-form video: whether to include chapter markers, B-roll direction notes, or just the spoken script",
+    "for ads or short-form: the platform (TikTok, Instagram Reels, YouTube Shorts) — each has different pacing and format norms",
+    "the tone and energy — fast-paced and punchy, slow and cinematic, educational and calm, hype and high-energy",
+    "whether voiceover, on-screen text, or music direction should be included in the script",
+  ],
+  agent_prompt: [
+    "what is this AI agent supposed to do — what tasks will it handle, and what should it refuse or escalate?",
+    "who will be talking to it — customers, internal team members, students, general public, or a specific professional audience?",
+    "what persona, name, or voice should it have — and does it need to maintain a specific brand tone or avoid breaking character?",
+    "what are the most important hard constraints — things it must NEVER do, say, or reveal under any circumstances?",
+    "what format should its responses take — bullet points, conversational prose, structured with headers, concise answers only, always ask a follow-up question?",
+    "does it need to follow a specific workflow — like always qualifying the user first, routing to different responses based on answers, or following a script for certain topics?",
+    "what platform or product will this run in — ChatGPT custom GPT, Claude Project, API system prompt, customer service tool, website widget? Platform determines syntax and feature constraints",
+    "what knowledge or context should the agent always have access to — company info, product details, policies, FAQs?",
+    "should it know when to hand off to a human, and if so how should it handle that transition?",
+    "examples of ideal responses, or descriptions of bad behavior the prompt needs to prevent",
+  ],
+  legal: [
+    "which country and specific legal jurisdiction governs this document — state/province matters for contracts in federal systems",
+    "who are the parties — individual persons, companies, or both — and what is each party's role in the agreement?",
+    "what is the core obligation or exchange being defined — what does each party owe the other?",
+    "key clauses that must be included — confidentiality/NDA terms, IP assignment, non-compete or non-solicit, indemnification, limitation of liability, governing law, dispute resolution (arbitration vs. litigation vs. mediation)",
+    "duration of the agreement and termination conditions — fixed term, perpetual, terminable at will, or with notice?",
+    "is this for internal drafting only (will be reviewed by a lawyer before use) or meant to be the final signed version?",
+    "how formal and precise should the language be — standard commercial contract language, plain English for a consumer audience, or simplified for a startup context?",
+    "specific risks or protections one party needs — payment protection, IP ownership clarity, confidentiality, exclusivity, warranties",
+    "whether standard boilerplate clauses (force majeure, entire agreement, severability, notices) should be included or kept minimal",
+  ],
+  other: [
+    "what success looks like — what would a perfect output do or contain?",
+    "who this is actually for — who will use or read the output?",
+    "constraints or things to avoid",
+    "how much detail is wanted — high-level overview or thorough deep-dive?",
+    "any examples of similar outputs that show the right direction",
+  ],
 };
 
 const STAGE_HINTS = {
@@ -623,12 +693,15 @@ const STAGE_HINTS = {
   presentation: "Often breaks into: overall structure/outline; then slide-by-slide content; then speaker notes or visual polish, but only if those were actually asked for.",
   image: "Almost always a single stage — splitting an image prompt rarely helps.",
   research: "Usually a single stage, unless the request genuinely spans multiple distinct sub-questions worth answering one at a time.",
+  video: "For AI video generation prompts: always one stage — a single well-crafted scene prompt is the deliverable. For video scripts: short-form (under 3 minutes, TikTok, Reels, ads) is always one stage. Long-form (YouTube, podcast, explainer) may split into hook + body sections + CTA, but only if the request explicitly asks for a full script with structure — otherwise one stage.",
+  agent_prompt: "Almost always one stage — a system prompt is a single coherent document. Only split if the agent needs a primary instruction block plus a separate reference section (e.g. a product FAQ or policy doc the agent should cite), and even then only if the user explicitly asked for both.",
+  legal: "Simple agreements (NDAs, basic service agreements, simple letters of intent): one stage. Complex documents (full employment agreement, terms of service, privacy policy) may split into: core obligations and definitions; then boilerplate provisions (IP, liability, termination, governing law); then execution/signature block — but only if the request explicitly asks for a complete final document, not a draft for counsel review.",
   other: "No fixed shape for this category — decide purely from what's genuinely separable in this specific request."
 };
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.19.1";
+const APP_VERSION  = "v1.20.0";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -644,18 +717,52 @@ anything that genuinely needs expert or regulatory scrutiny. You do not generate
 any prompts, questions, or advice — only this classification.
 
 <categories>
-- writing: blog posts, social media, emails, marketing copy, scripts, letters,
-  cover letters, general text of any kind
-- code: programs, scripts, automations, spreadsheet formulas, database queries,
-  anything meant to be executed or run
-- image: prompts for image-generation tools (Midjourney, DALL-E, Stable Diffusion, etc.)
-- research: requests for information, summaries, analysis, explanations,
-  competitive analysis, literature reviews, factual investigation
+- writing: blog posts, social media captions, emails, newsletters, marketing copy,
+  cover letters, formal letters, client proposals, product descriptions, general
+  text of any kind. Use this for human-readable written content. NOT for legal
+  documents (use legal), video scripts (use video), or AI agent instructions (use agent_prompt).
+
+- code: programs, scripts, automations, Excel/Sheets formulas, SQL queries,
+  regex patterns, CLI commands, API calls — anything meant to be executed or run
+  by a machine. NOT for explaining code (use research) or data analysis prompts
+  where the user wants an AI to interpret data (use research).
+
+- image: prompts for image-generation tools — Midjourney, DALL-E, Stable Diffusion,
+  Flux, Ideogram, Adobe Firefly, etc. For still images only. NOT for video generation
+  (use video).
+
+- research: requests for information, summaries, explanations, analysis,
+  competitive analysis, literature reviews, fact-finding, strategic assessments,
+  SWOT analyses, data interpretation, how-to explanations. Also use this when the
+  user wants an AI to analyze a dataset, interpret results, or produce a written
+  report from data.
+
 - financial_model: budgets, forecasts, financial projections, equity valuations,
   DCF analyses, investment analyses, business plans with numbers, ratio analyses,
   scenario models, M&A diligence — anything involving structured financial numbers
-  over time or a valuation of a real or hypothetical business or asset
-- presentation: slide decks, pitch decks, investor presentations
+  over time or a valuation of a real or hypothetical business or asset.
+
+- presentation: slide decks, pitch decks, investor presentations, conference
+  presentations, training decks — any request where the primary output is
+  slides, not a document.
+
+- video: prompts for AI video generation tools (Sora, Runway, Kling, Pika, Luma,
+  Veo) AND scripts/outlines for human-recorded video (YouTube, TikToks, Reels,
+  explainer videos, ads, podcasts, webinars). Use this whenever the output is
+  meant to be watched or listened to. NOT for still images (use image).
+
+- agent_prompt: system prompts, instructions, and personas for AI assistants —
+  custom GPTs, Claude Projects, chatbots, API-level system prompts, AI customer
+  service agents, AI tutors, AI personas in products. The output is instructions
+  that will govern how an AI behaves, not content the AI will produce directly.
+
+- legal: contracts, NDAs, terms of service, privacy policies, employment
+  agreements, letters of intent, MOUs, demand letters, compliance documents,
+  corporate governance documents — any document whose primary purpose is to
+  create, define, or document legal rights, obligations, or protections.
+  Distinguish from general business writing: a client proposal is writing; an
+  NDA is legal.
+
 - other: anything that doesn't fit cleanly above
 </categories>
 
@@ -832,12 +939,28 @@ external audience before.
   missing a competitive landscape slide, a client report missing a risks
   section.) Flag only if genuinely consequential for this specific type of work.
 
-FOR LEGAL / REGULATORY REQUESTS:
-- Which jurisdiction (country, state, region)?
-- Is this legal information vs legal advice — and does the output make that
-  distinction clear enough that a reader won't rely on it as the latter?
-- Are there recent regulatory changes that may have superseded training data?
-- Does any aspect require professional sign-off before acting on it?
+FOR LEGAL / REGULATORY REQUESTS (contracts, NDAs, ToS, employment agreements, etc.):
+Think like a commercial lawyer reviewing the brief before drafting begins.
+- JURISDICTION: Is the governing jurisdiction (country + state/province) identified?
+  Contract law, enforceability standards, and required clauses vary drastically —
+  an NDA valid in Delaware may be unenforceable in California on the same terms.
+- PARTY IDENTIFICATION: Are the contracting parties clearly identified — legal entity
+  names, not trade names? A contract between "Acme" and "Bob" is unenforceable
+  without full legal names and entity types.
+- ENFORCEABILITY GAPS: Are there standard clauses that the request doesn't mention
+  but that lawyers always include — consideration, governing law, dispute resolution
+  (arbitration vs. litigation), severability, entire agreement, notice provisions?
+  Flag only the ones genuinely relevant to this type of agreement.
+- IP AND OWNERSHIP: For employment, freelance, or vendor agreements — who owns
+  work product created under the agreement? Silence on IP assignment is a common
+  and expensive gap.
+- TERM AND TERMINATION: Is the duration defined, and are termination conditions
+  specified? A contract with no end date or termination clause creates indefinite
+  obligations that may be unintended.
+- LEGAL INFO VS LEGAL ADVICE: The output is AI-generated and has not been
+  reviewed by a licensed attorney. Flag only if the request involves genuine
+  legal complexity or significant financial/legal exposure — don't flag for a
+  simple NDA between two individuals.
 
 FOR HEALTHCARE / MEDICAL REQUESTS:
 - Is this clinical guidance or administrative context?
@@ -1091,20 +1214,39 @@ Without this, every projection is invented. Ask this before listing status,
 before FX, before anything else.
 
 PRESENTATION: If not already stated — (1) how many slides? Without this,
-the structure is a guess. Ask this before asking about density, tone, or content.
-
-WRITING (legal, employment, contracts): If not already stated — (1) which
-country/jurisdiction? Legal writing that ignores jurisdiction is potentially
-wrong. Ask this before anything about tone or length.
+the structure is a guess. Ask this before density, tone, or content questions.
 
 WRITING (cover letters, job applications, formal letters, client proposals,
 substantive business emails): If not already stated — (1) the sender's full
 name (to sign the output — without this the letter ends with a placeholder);
 (2) any real certifications, credentials, or named experiences relevant to
-the role or topic — without these the output invents brackets like
-[certification name]; (3) specific achievements or results from their
-background that should be highlighted. These are critical, not preferences —
-ask them before tone, length, or style.
+the role or topic — without these the output invents bracket placeholders;
+(3) specific achievements or results from their background that should be
+highlighted. Ask these before any tone, length, or style questions.
+
+VIDEO (AI generation — Sora, Runway, Kling, Pika, Luma, Veo): If not already
+stated — (1) is this a prompt for an AI video generation tool or a script for
+a human to record? This determines everything else. (2) for generation: what
+is the main subject and what action or motion is happening in the scene?
+Without a clear subject + motion, the prompt cannot be specific.
+
+VIDEO (script — YouTube, TikTok, podcast, explainer, ad): If not already
+stated — (1) what is the single most important message or takeaway for the
+viewer? Without this the script has no spine. Ask this before hook style,
+length, or format.
+
+AGENT_PROMPT: If not already stated — (1) what is the one core job of this
+AI agent — what should it always do, and what should it never do? This
+defines the entire system prompt. Ask this before persona, format, or tone.
+(2) what platform will this run on (ChatGPT custom GPT, Claude Project, API
+system prompt, website widget)? Platform determines what syntax and features
+are available.
+
+LEGAL: If not already stated — (1) which country and jurisdiction governs
+this document? Legal documents without jurisdiction are potentially wrong or
+unenforceable. Ask this first, before anything else. (2) who are the parties
+and what role does each play? Without identified parties the document cannot
+be drafted. Ask these before clause preferences or formatting questions.
 
 Skip any must-ask if the original request already answered it clearly.
 </category_must_ask>
@@ -2075,7 +2217,7 @@ function parseJSON(text){
    RESPONSE SCHEMAS (Gemini responseSchema — shape is now enforced by the
    API itself, not just requested in the prompt text)
    ===================================================================== */
-const CATEGORY_ENUM = ["writing","code","image","research","financial_model","presentation","other"];
+const CATEGORY_ENUM = ["writing","code","image","research","financial_model","presentation","video","agent_prompt","legal","other"];
 
 const CLASSIFY_SCHEMA = {
   type:"object",
