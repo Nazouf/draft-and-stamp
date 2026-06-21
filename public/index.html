@@ -479,6 +479,14 @@
   body.dark .paper-card .note-stakes{background:#2A220E;}
   body.dark .paper-card .pending-topics{background:#2A220E;}
 
+  /* ── Shared result view ─────────────────────────────────────────*/
+  .share-btn{background:none;border:none;color:var(--red);font-size:0.8rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-family:inherit;padding:0 0 0 8px;}
+  .share-btn:hover{opacity:.7;}
+  .shared-header{margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--paper-line);}
+  .shared-request{font-size:0.96rem;color:var(--ink);margin:0 0 10px;line-height:1.45;font-style:italic;}
+  .shared-footer{margin-top:28px;border-top:1px solid var(--paper-line);padding-top:20px;text-align:center;color:var(--muted);font-size:0.88rem;}
+  .shared-footer strong{color:var(--ink);}
+
   /* ── Review-answers screen ──────────────────────────────────────*/
   .review-list{display:flex;flex-direction:column;gap:7px;margin:18px 0 22px;}
   .review-row{background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:6px;padding:12px 14px;}
@@ -526,7 +534,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.11.0
+    &nbsp;·&nbsp; v1.12.0
   </div>
 </div>
 
@@ -1503,7 +1511,12 @@ async function initApp(){
     });
   }
   appInitialized = true;
-  renderAll();
+  const shareMatch = window.location.pathname.match(/^\/share\/([0-9a-f-]{36})$/i);
+  if (shareMatch) {
+    await loadSharedRun(shareMatch[1]);
+  } else {
+    renderAll();
+  }
 }
 
 // Refreshes whichever auth surface is currently visible (inline screen or modal).
@@ -1642,6 +1655,8 @@ let reviewEditIndex = null;
 let reviewEditValue = "";
 
 // History screen state — outside freshState() so startOver() doesn't clear it
+let sharedRun = null; // populated when visiting /share/:id
+
 let historyRuns = [];
 let historyPage = 0;
 let historyTotal = 0;
@@ -2201,6 +2216,71 @@ function renderReview(){
   return html;
 }
 
+async function loadSharedRun(id){
+  state.screen = "shared_loading";
+  renderAll();
+  try {
+    const resp = await fetch("/api/share/" + id);
+    if (!resp.ok) throw new Error("not found");
+    sharedRun = await resp.json();
+    state.screen = "shared";
+  } catch(e){
+    state.screen = "shared_error";
+  }
+  renderAll();
+}
+
+function renderSharedResult(){
+  if (state.screen === "shared_loading") return renderLoading("Loading prompt…");
+  if (state.screen === "shared_error"){
+    return '<div class="stamp-wrap"><span class="stamp">Not Found</span></div>' +
+      '<p class="stamp-sub" style="text-align:center;color:var(--muted);">This shared prompt doesn\'t exist or was removed.</p>' +
+      '<div class="btn-row" style="justify-content:center;">' +
+        '<a href="/" class="btn btn-primary" style="text-decoration:none;">Try Draft &amp; Stamp</a>' +
+      '</div>';
+  }
+  const run = sharedRun;
+  const prompts = (run.generated_prompts && run.generated_prompts.prompts) || [];
+  const multi = prompts.length > 1;
+  const destLabel = {claude:"Claude",chatgpt:"ChatGPT",gemini:"Gemini",grok:"Grok",perplexity:"Perplexity",deepseek:"DeepSeek",copilot:"Copilot",midjourney:"Midjourney",general:"General"}[run.destination] || run.destination || "";
+  const catLabel = (run.category || "").replace(/_/g," ");
+
+  let html = '<div class="stamp-wrap"><span class="stamp green">Approved</span></div>';
+  html += '<div class="shared-header">' +
+    '<p class="shared-request">' + esc(run.request || "") + '</p>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+      (destLabel ? '<span class="history-dest-chip">' + esc(destLabel) + '</span>' : '') +
+      (catLabel  ? '<span class="history-cat-chip">' + esc(catLabel) + '</span>'  : '') +
+    '</div>' +
+  '</div>';
+
+  if (multi){
+    html += '<p class="staged-order-note">Use these prompts in order, inside the same conversation — do not start a new chat between steps.</p>';
+  }
+
+  html += '<div class="prompt-cards">' + prompts.map((p, i) =>
+    '<div class="prompt-card">' +
+      '<div class="prompt-card-head">' +
+        '<div>' +
+          '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
+          (p.purpose ? '<div class="prompt-card-purpose">' + esc(p.purpose) + '</div>' : '') +
+        '</div>' +
+        '<button class="btn btn-small prompt-copy-btn" data-action="shared-copy" data-value="' + i + '">Copy</button>' +
+      '</div>' +
+      '<div class="output-block"><pre class="output-text">' + esc(p.content) + '</pre></div>' +
+    '</div>'
+  ).join("") + '</div>';
+
+  html += '<div class="shared-footer">' +
+    '<p>Crafted with <strong>Draft &amp; Stamp</strong> — turn any idea into a prompt that actually works.</p>' +
+    '<div class="btn-row" style="justify-content:center;margin-top:14px;">' +
+      '<a href="/" class="btn btn-primary" style="text-decoration:none;">Create your own</a>' +
+    '</div>' +
+  '</div>';
+
+  return html;
+}
+
 function renderProgress(){
   const s = state.screen;
   let step;
@@ -2524,7 +2604,7 @@ function renderResult(){
 
   html += '' +
     (currentUser
-      ? '<p class="cost-line">Saved to your account &middot; ' + esc(currentUser.email) + '</p>'
+      ? '<p class="cost-line">Saved &middot; ' + esc(currentUser.email) + (currentRunId ? ' <button class="share-btn" data-action="share-link">Share link</button>' : '') + '</p>'
       : '<p class="cost-line"><button class="link-btn" style="color:var(--muted);" data-action="open-login">Sign in to save your prompts across sessions</button></p>') +
     (state.feedbackSent
       ? '<div class="feedback-block"><p style="color:var(--green);font-size:0.9rem;margin:0;">Thanks for the feedback — it helps us improve.</p></div>'
@@ -2677,6 +2757,11 @@ function renderAll(){
   if (!appInitialized){
     body = renderLoading("Loading…");
     app.innerHTML = body;
+    return;
+  }
+
+  if (state.screen === "shared" || state.screen === "shared_loading" || state.screen === "shared_error"){
+    app.innerHTML = renderSharedResult();
     return;
   }
 
@@ -2945,6 +3030,17 @@ document.getElementById("app").addEventListener("click", function(e){
     case "history-load-more": loadHistory(historyPage + 1); break;
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
+    case "share-link": {
+      const url = window.location.origin + "/share/" + currentRunId;
+      navigator.clipboard.writeText(url).then(function(){ el.textContent = "Copied!"; setTimeout(function(){ el.textContent = "Share link"; }, 2000); });
+      break;
+    }
+    case "shared-copy": {
+      const idx = parseInt(el.dataset.value, 10);
+      const p = sharedRun && sharedRun.generated_prompts && sharedRun.generated_prompts.prompts && sharedRun.generated_prompts.prompts[idx];
+      if (p) navigator.clipboard.writeText(p.content).then(function(){ el.textContent = "Copied!"; setTimeout(function(){ el.textContent = "Copy"; }, 2000); });
+      break;
+    }
     case "rating-prompt":  setPromptRating(parseInt(el.dataset.v, 10));  break;
     case "rating-results": setResultsRating(parseInt(el.dataset.v, 10)); break;
     case "submit-feedback": submitFeedback(); break;

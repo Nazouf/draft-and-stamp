@@ -421,6 +421,28 @@ app.post("/api/admin/keys/:index", requireAdmin, async (req, res) => {
   res.json({ ok: true, stat });
 });
 
+// ─── Share routes ─────────────────────────────────────────────────────────────
+// Public — no auth required. Run IDs are UUIDs (hard to guess).
+app.get("/api/share/:id", async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: "DB not configured" });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("runs")
+      .select("id, created_at, request, destination, category, generated_prompts")
+      .eq("id", req.params.id)
+      .single();
+    if (error || !data) return res.status(404).json({ error: "Not found" });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// SPA route — serves index.html so /share/:id works as a direct URL
+app.get("/share/:id", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 const PORT = process.env.PORT || 3000;
 loadKeyStats().then(() => {
   app.listen(PORT, () => {
