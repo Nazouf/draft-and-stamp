@@ -2,14 +2,26 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
+import rateLimit from "express-rate-limit";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.set("trust proxy", 1); // Required on Render: proxy sets X-Forwarded-For
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const APP_VERSION = "v1.20.0";
+// Per-IP rate limit on the Gemini proxy — prevents abuse of paid API keys.
+// 50 requests per 10 minutes = ~5 full pipeline sessions.
+const geminiLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait a few minutes and try again." }
+});
+
+const APP_VERSION = "v1.21.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -176,7 +188,7 @@ app.get("/api/config", async (req, res) => {
 });
 
 // ─── Gemini proxy ──────────────────────────────────────────────────────────────
-app.post("/api/gemini", async (req, res) => {
+app.post("/api/gemini", geminiLimiter, async (req, res) => {
   if (API_KEYS.length === 0) {
     return res.status(500).json({ error: { message: "No API keys configured. Add GEMINI_API_KEY to .env and restart." } });
   }
