@@ -551,7 +551,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.16.0
+    &nbsp;·&nbsp; v1.16.1
   </div>
 </div>
 
@@ -625,7 +625,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.16.0";
+const APP_VERSION  = "v1.16.1";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -1782,8 +1782,10 @@ async function saveRun(){
   if (!sbClient || !state.finalResult) return null;
   const c = state.classification;
   try{
-    const session = await sbClient.auth.getSession();
-    const token = session.data.session?.access_token;
+    if (currentRunId){
+      await sbClient.from("runs").update({ generated_prompts: state.finalResult.prompts }).eq("id", currentRunId);
+      return currentRunId;
+    }
     const { data, error } = await sbClient.from("runs").insert({
       user_id: currentUser?.id || null,
       request: state.originalRequest,
@@ -2362,7 +2364,6 @@ function regenerate(){
   state.resultsRating = null;
   state.feedbackComment = "";
   state.feedbackSent = false;
-  currentRunId = null;
   runGenerate();
 }
 
