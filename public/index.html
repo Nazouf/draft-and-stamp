@@ -441,6 +441,44 @@
   .skip-btn{display:block;background:none;border:none;color:var(--muted);font-size:0.8rem;cursor:pointer;font-family:inherit;margin:4px 0 14px;text-decoration:underline;text-underline-offset:2px;padding:0;}
   .skip-btn:hover{color:var(--ink);}
   /* ── History screen ─────────────────────────────────────────── */
+  /* ── Pipeline progress bar ──────────────────────────────────── */
+  .pipeline-progress{display:flex;align-items:center;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--paper-line);}
+  .pp-step{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;}
+  .pp-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--paper-line);background:transparent;transition:background .2s,border-color .2s;}
+  .pp-step.done .pp-dot{background:var(--green);border-color:var(--green);}
+  .pp-step.active .pp-dot{background:var(--ink);border-color:var(--ink);}
+  .pp-label{font-family:'IBM Plex Mono',monospace;font-size:0.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--paper-line);white-space:nowrap;}
+  .pp-step.done .pp-label{color:var(--green);}
+  .pp-step.active .pp-label{color:var(--muted);font-weight:600;}
+  .pp-line{flex:1;height:1.5px;background:var(--paper-line);margin:0 8px;margin-bottom:14px;transition:background .2s;}
+  .pp-line.done{background:var(--green);}
+
+  /* ── Dark mode ───────────────────────────────────────────────── */
+  body.dark .paper-card,
+  body.dark .auth-modal{
+    --ink:#E0D8C8;--paper:#1A2138;--paper-soft:#212A40;--paper-line:#2D3B58;--muted:#8A8A9E;
+    background:#1A2138;
+    background-image:repeating-linear-gradient(to bottom,transparent,transparent 35px,rgba(45,59,88,.35) 35px,rgba(45,59,88,.35) 36px);
+    color:#E0D8C8;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.03) inset;
+  }
+  body.dark .auth-modal{background-image:none;}
+  /* output block stays dark (uses var(--ink) for bg — now overridden to cream, so force it) */
+  body.dark .paper-card .output-block{background:#0E1525;}
+  /* dest chip: bg was var(--ink) which is now cream — needs explicit override */
+  body.dark .paper-card .history-dest-chip{background:#3A4568;color:#E0D8C8;}
+  /* hardcoded hover/active backgrounds */
+  body.dark .paper-card .option-btn:hover{background:#283050;border-color:var(--red);}
+  body.dark .paper-card .history-card-top:hover{background:#253048;}
+  body.dark .paper-card .auth-google-btn:hover,
+  body.dark .auth-modal .auth-google-btn:hover{background:#283050;}
+  /* hardcoded light accent fills */
+  body.dark .paper-card .check-box.on{background:#2A1E1E;border-color:var(--red);}
+  body.dark .paper-card .topic-row .check-box.on{background:#2A220E;}
+  body.dark .paper-card .note-assumptions{background:#2A1E1E;border-color:var(--red);}
+  body.dark .paper-card .note-stakes{background:#2A220E;}
+  body.dark .paper-card .pending-topics{background:#2A220E;}
+
   /* ── Review-answers screen ──────────────────────────────────────*/
   .review-list{display:flex;flex-direction:column;gap:7px;margin:18px 0 22px;}
   .review-row{background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:6px;padding:12px 14px;}
@@ -488,7 +526,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.10.0
+    &nbsp;·&nbsp; v1.11.0
   </div>
 </div>
 
@@ -1595,6 +1633,10 @@ function freshState(){
 }
 let state = freshState();
 
+// Dark mode — persisted in localStorage, applied immediately to avoid flash
+let darkMode = localStorage.getItem("darkMode") === "true";
+if (darkMode) document.body.classList.add("dark");
+
 // Review-answers screen state
 let reviewEditIndex = null;
 let reviewEditValue = "";
@@ -2159,6 +2201,31 @@ function renderReview(){
   return html;
 }
 
+function renderProgress(){
+  const s = state.screen;
+  let step;
+  if (["classifying","classified","considerations_loading","considerations"].includes(s)) step = 1;
+  else if (["loading_question","interview","review"].includes(s)) step = 2;
+  else if (["staging_loading","staged","generating_loading","result"].includes(s)) step = 3;
+  else return "";
+  const labels = ["Classify","Interview","Generate"];
+  let html = '<div class="pipeline-progress">';
+  labels.forEach(function(label, i){
+    const n = i + 1;
+    const cls = n < step ? "done" : n === step ? "active" : "";
+    html += '<div class="pp-step ' + cls + '"><div class="pp-dot"></div><div class="pp-label">' + label + '</div></div>';
+    if (i < 2) html += '<div class="pp-line' + (n < step ? " done" : "") + '"></div>';
+  });
+  return html + '</div>';
+}
+
+function toggleDarkMode(){
+  darkMode = !darkMode;
+  localStorage.setItem("darkMode", darkMode);
+  document.body.classList.toggle("dark", darkMode);
+  renderTopbar();
+}
+
 async function loadHistory(pageNum){
   historyLoading = true;
   if (pageNum === 0){ historyRuns = []; historyExpanded = new Set(); }
@@ -2251,19 +2318,19 @@ function renderHistory(){
 }
 
 function renderTopbar(){
-  if (!currentUser){
-    document.getElementById("topbar-right").innerHTML = '';
-    return;
-  }
   let html = '';
-  if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
-  html += '<span class="chip">' + esc(currentUser.email) + '</span>';
-  html += '<span class="topbar-sep"></span>';
-  html += '<button class="topbar-btn" data-action="show-history">My prompts</button>';
-  if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:5px 13px;font-size:0.8rem;text-decoration:none;">Admin</a>';
-  html += '<span class="topbar-sep"></span>';
-  html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
-  html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
+  if (currentUser){
+    if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
+    html += '<span class="chip">' + esc(currentUser.email) + '</span>';
+    html += '<span class="topbar-sep"></span>';
+    html += '<button class="topbar-btn" data-action="show-history">My prompts</button>';
+    if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:5px 13px;font-size:0.8rem;text-decoration:none;">Admin</a>';
+    html += '<span class="topbar-sep"></span>';
+    html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
+    html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
+    html += '<span class="topbar-sep"></span>';
+  }
+  html += '<button class="topbar-btn" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
   document.getElementById("topbar-right").innerHTML = html;
 }
 
@@ -2637,7 +2704,7 @@ function renderAll(){
     case "history": body = renderHistory(); break;
     default: body = renderStart();
   }
-  app.innerHTML = body + renderErrorBanner();
+  app.innerHTML = renderProgress() + body + renderErrorBanner();
 }
 
 /* =====================================================================
@@ -2860,6 +2927,7 @@ document.getElementById("app").addEventListener("click", function(e){
       authError = null; authSuccess = null;
       refreshAuth();
       break;
+    case "toggle-dark": toggleDarkMode(); break;
     case "show-history": loadHistory(0); break;
     case "history-expand": {
       const rid = el.dataset.value;
@@ -2892,6 +2960,7 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   else if (el.dataset.action === "open-login") openLogin();
   else if (el.dataset.action === "sign-out") signOut();
   else if (el.dataset.action === "show-history") loadHistory(0);
+  else if (el.dataset.action === "toggle-dark") toggleDarkMode();
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){
