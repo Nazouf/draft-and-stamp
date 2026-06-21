@@ -427,6 +427,8 @@
     cursor:pointer;margin-top:14px;font-family:inherit;text-align:center;
   }
   .auth-toggle:hover{color:var(--ink);}
+  .skip-btn{display:block;background:none;border:none;color:var(--muted);font-size:0.8rem;cursor:pointer;font-family:inherit;margin:4px 0 14px;text-decoration:underline;text-underline-offset:2px;padding:0;}
+  .skip-btn:hover{color:var(--ink);}
   /* ── History screen ─────────────────────────────────────────── */
   .history-header{margin-bottom:20px;}
   .history-title{font-size:1.35rem;font-weight:700;margin:0 0 3px;font-family:'Fraunces',serif;}
@@ -462,7 +464,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.8.0
+    &nbsp;·&nbsp; v1.8.1
   </div>
 </div>
 
@@ -2298,7 +2300,8 @@ function renderInterview(){
     (pending.length ? '<div class="pending-topics">Still need to cover: ' + pending.map(t => esc(t.label)).join(", ") + '</div>' : '') +
     '<p class="question-text">' + esc(q.text) + '</p>' +
     (q.hint ? '<p class="question-hint">' + esc(q.hint) + '</p>' : '') +
-    renderOptionInput(q);
+    renderOptionInput(q) +
+    '<button class="skip-btn" data-action="skip-question">Skip this question</button>';
   if (state.qaHistory.length){
     html += '<button class="decisions-toggle" data-action="toggle-decisions">' + (state.decisionsOpen?"Hide":"Show") + ' decisions so far</button>';
     if (state.decisionsOpen){
@@ -2718,6 +2721,7 @@ document.getElementById("app").addEventListener("click", function(e){
       submitAnswer((input ? input.value : "50") + "/100");
       break;
     }
+    case "skip-question": submitAnswer("(skipped)"); break;
     case "continue-after-staging": runGenerate(); break;
     case "retry": retryLastStep(); break;
     case "start-over": startOver(); break;
