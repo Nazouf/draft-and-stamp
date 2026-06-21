@@ -551,7 +551,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.16.1
+    &nbsp;·&nbsp; v1.17.0
   </div>
 </div>
 
@@ -625,7 +625,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.16.1";
+const APP_VERSION  = "v1.17.0";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -1053,6 +1053,14 @@ present the two conflicting requirements and ask which takes priority.
 Example: "Your request asks for something both very short and extremely detailed
 — which matters more: fitting in one page, or covering everything thoroughly?"
 Mark contradiction-resolution questions as priority "critical".
+
+Also scan all answers given so far before selecting the next question. If an
+answer contradicts a prior answer in a way that would materially change the
+output — for example, Q1 answer says "this is for an internal team" but a
+later answer implies "it will be sent to external clients" — write a
+clarifying question before continuing. Frame it by surfacing both answers
+directly: "Earlier you said X, but you also mentioned Y — which is it?"
+Mark these critical and resolve them before any enrichment questions.
 </contradiction_handling>
 
 <category_must_ask>
@@ -1871,6 +1879,22 @@ let historySearchTimer = null;
 let generateElapsed = 0;
 let generateTimerInterval = null;
 
+let funnelSessionId = null;
+function fireFunnelEvent(event, extra){
+  if (!funnelSessionId || !sbClient) return;
+  (async () => {
+    try{
+      const session = await sbClient.auth.getSession();
+      const token = session?.data?.session?.access_token;
+      fetch("/api/funnel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? {"Authorization":"Bearer "+token} : {}) },
+        body: JSON.stringify({ session_id: funnelSessionId, event, ...extra })
+      }).catch(() => {});
+    } catch(e){}
+  })();
+}
+
 function logUsage(step, model, usage){
   state.usageEvents.push({step, model, input_tokens:usage.input_tokens||0, output_tokens:usage.output_tokens||0});
 }
@@ -2175,6 +2199,7 @@ function handleStartClick(){
 }
 
 async function runClassify(){
+  funnelSessionId = crypto.randomUUID();
   state.screen = "classifying"; state.error = null; renderAll();
   try{
     const { text, usage } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODEL);
@@ -2182,6 +2207,8 @@ async function runClassify(){
     logUsage("classify", FAST_MODEL, usage);
     state.screen = "classified";
     renderAll();
+    const c = state.classification;
+    fireFunnelEvent("classified", { category: c.primary_category, destination: state.destination, complexity: c.complexity });
     state._stampTimer = setTimeout(proceedFromClassification, 1200);
   } catch(e){
     state.error = { step:"classify", message:e.message };
@@ -2267,6 +2294,7 @@ async function runSelectQuestion(forceTopic){
     if (json.action === "complete" || !json.next_question){
       proceedAfterInterview();
     } else {
+      if (state.qaHistory.length === 0) fireFunnelEvent("interview_started");
       state.currentQuestion = json.next_question;
       state.multiSelections = [];
       state.customAnswerMode = false;
@@ -2302,6 +2330,7 @@ function proceedAfterInterview(){
 }
 
 function confirmGenerate(){
+  fireFunnelEvent("interview_complete");
   const c = state.classification;
   if (c.complexity === "big") runStagePlanner(); else runGenerate();
 }
@@ -2344,6 +2373,7 @@ async function runGenerate(){
     clearInterval(generateTimerInterval); generateTimerInterval = null;
     logUsage("generate", STRONG_MODEL, usage);
     await finalizeSession();
+    fireFunnelEvent("generated");
     state.screen = "result";
     renderAll();
     startTypewriter();

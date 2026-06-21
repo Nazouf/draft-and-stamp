@@ -225,6 +225,12 @@
       </div>
     </div>
 
+    <!-- Funnel -->
+    <div class="chart-card" style="margin-bottom:20px;">
+      <div class="chart-title">Pipeline funnel — unique sessions</div>
+      <div id="funnel-content" style="color:var(--text-dim);font-size:0.85rem;">Loading…</div>
+    </div>
+
     <!-- Tabs -->
     <div class="tab-bar">
       <button class="tab-btn active" data-tab="runs">Runs</button>
@@ -306,6 +312,7 @@ async function init() {
   renderChart();
   renderToggle();
   renderBreakdowns();
+  loadFunnel();
   renderRunsFilter();
   loadRuns();
   setupTabs();
@@ -659,6 +666,33 @@ async function saveLimit(idx) {
   const daily_limit = parseInt(input.value) || 0;
   await adminFetch(`/api/admin/keys/${idx}`, { method: "POST", body: JSON.stringify({ daily_limit }) });
   loadKeys();
+}
+
+// ── Funnel ────────────────────────────────────────────────────────────────────
+async function loadFunnel() {
+  const el = document.getElementById("funnel-content");
+  const res = await adminFetch("/api/admin/funnel");
+  const { funnel, error } = await res.json();
+  if (error || !funnel) { el.innerHTML = '<span style="color:#E07070;">Failed to load.</span>'; return; }
+
+  const labels = { classified:"Classified", interview_started:"Interview started", interview_complete:"Interview complete", generated:"Generated" };
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:0.86rem;">';
+  html += '<thead><tr><th style="text-align:left;padding:6px 10px;color:var(--text-dim);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:\'IBM Plex Mono\',monospace;border-bottom:1px solid var(--border);">Stage</th><th style="text-align:right;padding:6px 10px;color:var(--text-dim);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:\'IBM Plex Mono\',monospace;border-bottom:1px solid var(--border);">Sessions</th><th style="text-align:right;padding:6px 10px;color:var(--text-dim);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:\'IBM Plex Mono\',monospace;border-bottom:1px solid var(--border);">From prev</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);"></th></tr></thead><tbody>';
+
+  funnel.forEach((row, i) => {
+    const prev = i > 0 ? funnel[i - 1].sessions : null;
+    const pct = (prev && prev > 0) ? Math.round(row.sessions / prev * 100) : null;
+    const barW = funnel[0].sessions > 0 ? Math.round(row.sessions / funnel[0].sessions * 100) : 0;
+    const barColor = barW >= 80 ? "#3F6E55" : barW >= 50 ? "#A6760B" : "#B23A2E";
+    html += `<tr>
+      <td style="padding:8px 10px;color:var(--text);">${labels[row.event] || row.event}</td>
+      <td style="padding:8px 10px;text-align:right;font-family:'IBM Plex Mono',monospace;">${row.sessions}</td>
+      <td style="padding:8px 10px;text-align:right;font-family:'IBM Plex Mono',monospace;color:${pct !== null && pct < 70 ? "#D07070" : "var(--text-dim)"};">${pct !== null ? pct + "%" : "—"}</td>
+      <td style="padding:8px 10px;width:120px;"><div style="background:var(--border);border-radius:3px;height:6px;"><div style="background:${barColor};height:6px;border-radius:3px;width:${barW}%;"></div></div></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

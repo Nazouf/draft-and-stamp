@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const APP_VERSION = "v1.16.1";
+const APP_VERSION = "v1.17.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -233,6 +233,41 @@ app.get("/api/runs", async (req, res) => {
     const { data, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;
     res.json({ runs: data || [], total: count || 0, page, limit });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Funnel events ─────────────────────────────────────────────────────────────
+app.post("/api/funnel", async (req, res) => {
+  const user = await verifyUser(req);
+  const { session_id, event, category, destination, complexity } = req.body || {};
+  if (!session_id || !event) return res.status(400).json({ error: "session_id and event required" });
+  try {
+    await supabaseAdmin.from("funnel_events").insert({
+      user_id: user?.id || null, session_id, event,
+      category: category || null, destination: destination || null, complexity: complexity || null
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/funnel", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("funnel_events")
+      .select("event, session_id");
+    if (error) throw error;
+    const counts = {};
+    (data || []).forEach(r => {
+      if (!counts[r.event]) counts[r.event] = new Set();
+      counts[r.event].add(r.session_id);
+    });
+    const order = ["classified", "interview_started", "interview_complete", "generated"];
+    const funnel = order.map(e => ({ event: e, sessions: counts[e] ? counts[e].size : 0 }));
+    res.json({ funnel });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
