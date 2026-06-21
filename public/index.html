@@ -464,7 +464,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.8.1
+    &nbsp;·&nbsp; v1.9.0
   </div>
 </div>
 
@@ -2036,6 +2036,16 @@ async function finalizeSession(){
   currentRunId = await saveRun();
 }
 
+function regenerate(){
+  state.finalResult = null;
+  state.promptRating = null;
+  state.resultsRating = null;
+  state.feedbackComment = "";
+  state.feedbackSent = false;
+  currentRunId = null;
+  runGenerate();
+}
+
 function retryLastStep(){
   if (!state.error) return;
   const step = state.error.step;
@@ -2401,7 +2411,10 @@ function renderResult(){
         '</div>') +
     '<button class="ledger-toggle" data-action="toggle-ledger">' + (state.ledgerOpen?"Hide":"Show") + ' what happened behind the scenes</button>' +
     (state.ledgerOpen ? renderLedger() : '') +
-    '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>';
+    '<div class="btn-row">' +
+      '<button class="btn" data-action="regenerate">Regenerate</button>' +
+      '<button class="btn" data-action="start-over">Start a new prompt</button>' +
+    '</div>';
 
   return html;
 }
@@ -2722,6 +2735,7 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     }
     case "skip-question": submitAnswer("(skipped)"); break;
+    case "regenerate": regenerate(); break;
     case "continue-after-staging": runGenerate(); break;
     case "retry": retryLastStep(); break;
     case "start-over": startOver(); break;
