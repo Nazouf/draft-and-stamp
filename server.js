@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const APP_VERSION = "v1.18.0";
+const APP_VERSION = "v1.19.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -39,6 +39,18 @@ let keyStats = API_KEYS.map((_, i) => ({
   last_reset_date: new Date().toISOString().slice(0, 10)
 }));
 let keyIndex = 0;
+
+// ─── Settings cache (avoids a DB round-trip on every Gemini call) ─────────────
+let _unrestrictedCache = null, _unrestrictedExpiry = 0;
+
+async function getUnrestrictedMode() {
+  if (Date.now() < _unrestrictedExpiry) return _unrestrictedCache;
+  if (!supabaseAdmin) { _unrestrictedCache = true; _unrestrictedExpiry = Date.now() + 60000; return true; }
+  const { data } = await supabaseAdmin.from("settings").select("value").eq("key", "unrestricted_mode").single();
+  _unrestrictedCache = data?.value !== "false";
+  _unrestrictedExpiry = Date.now() + 60000;
+  return _unrestrictedCache;
+}
 
 async function loadKeyStats() {
   if (!supabaseAdmin) return;
@@ -131,16 +143,6 @@ async function isAdminUser(userId) {
     .eq("id", userId)
     .single();
   return data?.is_admin === true;
-}
-
-async function getUnrestrictedMode() {
-  if (!supabaseAdmin) return true;
-  const { data } = await supabaseAdmin
-    .from("settings")
-    .select("value")
-    .eq("key", "unrestricted_mode")
-    .single();
-  return data?.value !== "false";
 }
 
 async function requireAdmin(req, res, next) {
@@ -284,30 +286,46 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
       getUnrestrictedMode()
     ]);
 
-    const activeUsersRes = await supabaseAdmin
-      .from("runs")
-      .select("user_id")
-      .gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString())
-      .not("user_id", "is", null);
+    // All remaining queries run in parallel
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const sevenDaysAgo  = new Date(Date.now() - 7  * 86400000).toISOString();
+    const [activeUsersRes, allRunsRes, recentRunsRes, recentQARes] = await Promise.all([
+      supabaseAdmin.from("runs").select("user_id").gte("created_at", sevenDaysAgo).not("user_id", "is", null),
+      supabaseAdmin.from("runs").select("category, destination, complexity"),
+      supabaseAdmin.from("runs").select("created_at").gte("created_at", thirtyDaysAgo),
+      supabaseAdmin.from("runs").select("qa_pairs, complexity, generated_prompts").order("created_at", { ascending: false }).limit(300)
+    ]);
 
     const uniqueUsers = new Set((activeUsersRes.data || []).map(r => r.user_id)).size;
 
-    const { data: allRuns } = await supabaseAdmin.from("runs").select("category, destination");
-    const categoryCounts = {};
-    const destCounts = {};
-    (allRuns || []).forEach(r => {
+    const allRuns = allRunsRes.data || [];
+    const categoryCounts = {}, destCounts = {}, complexityCounts = { big: 0, small: 0 };
+    allRuns.forEach(r => {
       if (r.category) categoryCounts[r.category] = (categoryCounts[r.category] || 0) + 1;
       if (r.destination) destCounts[r.destination] = (destCounts[r.destination] || 0) + 1;
+      if (r.complexity) complexityCounts[r.complexity] = (complexityCounts[r.complexity] || 0) + 1;
     });
+
+    // Question count + staging stats from recent 300 runs
+    const recentQA = recentQARes.data || [];
+    let totalQs = 0, qCount = 0, stagedCount = 0, bigCount = 0;
+    recentQA.forEach(r => {
+      const pairs = Array.isArray(r.qa_pairs) ? r.qa_pairs.length : 0;
+      if (pairs > 0) { totalQs += pairs; qCount++; }
+      if (r.complexity === "big") {
+        bigCount++;
+        const prompts = r.generated_prompts && Array.isArray(r.generated_prompts.prompts) ? r.generated_prompts.prompts.length : 0;
+        if (prompts > 1) stagedCount++;
+      }
+    });
+    const avgQuestionsPerRun = qCount ? (totalQs / qCount).toFixed(1) : null;
+    const stagedPct = bigCount ? Math.round(stagedCount / bigCount * 100) : null;
 
     const fbRows = feedbackAvgs.data || [];
     const avgRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.rating || 0), 0) / fbRows.length).toFixed(1) : null;
     const avgResultsRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.results_rating || 0), 0) / fbRows.length).toFixed(1) : null;
 
-    // Runs per day — last 30 days
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: recentRuns } = await supabaseAdmin
-      .from("runs").select("created_at").gte("created_at", thirtyDaysAgo);
+    const recentRuns = recentRunsRes.data || [];
     const dayMap = {};
     const now = new Date();
     for (let i = 29; i >= 0; i--) {
@@ -315,7 +333,7 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
       d.setDate(d.getDate() - i);
       dayMap[d.toISOString().slice(0, 10)] = 0;
     }
-    (recentRuns || []).forEach(r => {
+    recentRuns.forEach(r => {
       const key = r.created_at.slice(0, 10);
       if (key in dayMap) dayMap[key]++;
     });
@@ -330,6 +348,9 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
       feedbackCount: fbRows.length,
       categoryCounts,
       destCounts,
+      complexityCounts,
+      avgQuestionsPerRun,
+      stagedPct,
       unrestrictedMode: unrestricted,
       runsPerDay
     });
@@ -438,6 +459,7 @@ app.post("/api/admin/settings", requireAdmin, async (req, res) => {
       .from("settings")
       .upsert({ key, value: String(value), updated_at: new Date().toISOString() });
     if (error) throw error;
+    _unrestrictedExpiry = 0; // invalidate cache so next request re-reads from DB
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

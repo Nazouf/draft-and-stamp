@@ -338,6 +338,9 @@ function renderStats() {
     { value: s.avgRating !== null ? s.avgRating + " / 10" : "—", label: "Avg prompt rating" },
     { value: s.avgResultsRating !== null ? s.avgResultsRating + " / 10" : "—", label: "Avg results rating" },
     { value: s.feedbackCount || 0, label: "Feedback submissions" },
+    { value: s.avgQuestionsPerRun !== null ? s.avgQuestionsPerRun : "—", label: "Avg questions / run" },
+    { value: s.stagedPct !== null ? s.stagedPct + "%" : "—", label: "Big tasks staged" },
+    { value: s.complexityCounts ? ((s.complexityCounts.big || 0) + "b / " + (s.complexityCounts.small || 0) + "s") : "—", label: "Big vs small" },
   ].map(c =>
     `<div class="stat-card"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`
   ).join("");
