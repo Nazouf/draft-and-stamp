@@ -79,6 +79,17 @@
     cursor:pointer;padding:4px 0;
   }
   .link-btn:hover{color:#EFEAD9;}
+  .topbar-btn{
+    background:transparent;
+    border:1px solid #4A5066;
+    color:#C9C2AC;
+    font-size:0.8rem;font-family:inherit;font-weight:500;
+    padding:5px 13px;border-radius:5px;
+    cursor:pointer;white-space:nowrap;
+    transition:border-color .15s,color .15s,background .15s;
+  }
+  .topbar-btn:hover{border-color:#8A8A7A;color:#EFEAD9;background:rgba(255,255,255,0.04);}
+  .topbar-sep{width:1px;height:18px;background:#34394A;flex-shrink:0;margin:0 2px;}
 
   /* ---------- main ---------- */
   .main{
@@ -464,7 +475,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.9.0
+    &nbsp;·&nbsp; v1.9.1
   </div>
 </div>
 
@@ -2183,10 +2194,12 @@ function renderTopbar(){
   let html = '';
   if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
   html += '<span class="chip">' + esc(currentUser.email) + '</span>';
-  if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:6px 14px;font-size:0.82rem;text-decoration:none;">Admin</a>';
-  html += '<button class="link-btn" data-action="show-history">My prompts</button>';
-  html += '<button class="link-btn" data-action="sign-out">Sign out</button>';
-  html += '<button class="link-btn" data-action="start-over">Start over</button>';
+  html += '<span class="topbar-sep"></span>';
+  html += '<button class="topbar-btn" data-action="show-history">My prompts</button>';
+  if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:5px 13px;font-size:0.8rem;text-decoration:none;">Admin</a>';
+  html += '<span class="topbar-sep"></span>';
+  html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
+  html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
   document.getElementById("topbar-right").innerHTML = html;
 }
 
