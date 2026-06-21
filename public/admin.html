@@ -139,6 +139,10 @@
   .page-btn:disabled{opacity:.4;cursor:not-allowed;}
   .page-btn:not(:disabled):hover{border-color:var(--text-dim);}
 
+  /* ── chart ── */
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px 24px;margin-bottom:32px;}
+  .chart-title{font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);margin-bottom:16px;}
+
   /* ── run detail modal ── */
   .modal-overlay{position:fixed;inset:0;background:rgba(20,24,35,0.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
   .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;width:100%;max-width:680px;max-height:85vh;overflow-y:auto;padding:28px;}
@@ -177,6 +181,12 @@
 
     <!-- Stats -->
     <div class="stats-grid" id="stats-grid"></div>
+
+    <!-- Chart -->
+    <div class="chart-card">
+      <div class="chart-title">Runs per day — last 30 days</div>
+      <canvas id="runs-chart" height="90"></canvas>
+    </div>
 
     <!-- Unrestricted mode toggle -->
     <div class="toggle-section">
@@ -230,6 +240,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 let sbClient = null;
@@ -282,6 +293,7 @@ async function init() {
   document.getElementById("dashboard").style.display = "block";
 
   renderStats();
+  renderChart();
   renderToggle();
   renderBreakdowns();
   loadRuns();
@@ -355,6 +367,40 @@ function renderBreakdowns() {
   renderBreakdown(statsData.destCounts, "dest-breakdown");
 }
 
+function renderChart() {
+  const data = statsData.runsPerDay || [];
+  const ctx = document.getElementById("runs-chart").getContext("2d");
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: data.map(d => {
+        const [, m, day] = d.date.split("-");
+        return `${parseInt(m)}/${parseInt(day)}`;
+      }),
+      datasets: [{
+        data: data.map(d => d.count),
+        borderColor: "#B23A2E",
+        backgroundColor: "rgba(178,58,46,0.1)",
+        borderWidth: 2,
+        pointRadius: data.map(d => d.count > 0 ? 3 : 0),
+        pointBackgroundColor: "#B23A2E",
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.parsed.y} run${ctx.parsed.y !== 1 ? "s" : ""}` }
+      }},
+      scales: {
+        x: { ticks: { color: "#9BA3B8", font: { size: 10 }, maxTicksLimit: 10 }, grid: { color: "#2D3547" } },
+        y: { ticks: { color: "#9BA3B8", precision: 0 }, grid: { color: "#2D3547" }, beginAtZero: true }
+      }
+    }
+  });
+}
+
 function setupTabs() {
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.onclick = () => {
@@ -373,14 +419,42 @@ function setupTabs() {
 }
 
 // ── Runs tab ──────────────────────────────────────────────────────────────────
+async function exportCsv() {
+  const btn = document.getElementById("export-csv-btn");
+  btn.textContent = "Exporting…";
+  btn.disabled = true;
+  try {
+    const res = await adminFetch("/api/admin/export/runs");
+    const text = await res.text();
+    const blob = new Blob([text], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `runs-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert("Export failed: " + e.message);
+  } finally {
+    btn.textContent = "Export CSV";
+    btn.disabled = false;
+  }
+}
+
 async function loadRuns() {
   const el = document.getElementById("runs-content");
   el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
   const res = await adminFetch(`/api/admin/runs?page=${runsPage}`);
   const { runs, total } = await res.json();
-  if (!runs.length) { el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">No runs yet.</div>'; return; }
 
-  let html = `<table class="data-table"><thead><tr>
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <span style="color:var(--text-dim);font-size:0.85rem;">${total} total run${total !== 1 ? "s" : ""}</span>
+    <button class="page-btn" id="export-csv-btn" onclick="exportCsv()">Export CSV</button>
+  </div>`;
+
+  if (!runs.length) { el.innerHTML = header + '<div style="color:var(--text-dim);padding:20px 0;">No runs yet.</div>'; return; }
+
+  let html = header + `<table class="data-table"><thead><tr>
     <th>Time</th><th>Request</th><th>Destination</th><th>Category</th><th>Mode</th><th></th>
   </tr></thead><tbody>`;
   runs.forEach(r => {

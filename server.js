@@ -259,6 +259,23 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
     const avgRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.rating || 0), 0) / fbRows.length).toFixed(1) : null;
     const avgResultsRating = fbRows.length ? (fbRows.reduce((s, r) => s + (r.results_rating || 0), 0) / fbRows.length).toFixed(1) : null;
 
+    // Runs per day — last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: recentRuns } = await supabaseAdmin
+      .from("runs").select("created_at").gte("created_at", thirtyDaysAgo);
+    const dayMap = {};
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      dayMap[d.toISOString().slice(0, 10)] = 0;
+    }
+    (recentRuns || []).forEach(r => {
+      const key = r.created_at.slice(0, 10);
+      if (key in dayMap) dayMap[key]++;
+    });
+    const runsPerDay = Object.entries(dayMap).map(([date, count]) => ({ date, count }));
+
     res.json({
       totalRuns: totalRuns.count || 0,
       runsToday: runsToday.count || 0,
@@ -268,7 +285,8 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
       feedbackCount: fbRows.length,
       categoryCounts,
       destCounts,
-      unrestrictedMode: unrestricted
+      unrestrictedMode: unrestricted,
+      runsPerDay
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -419,6 +437,26 @@ app.post("/api/admin/keys/:index", requireAdmin, async (req, res) => {
   if (daily_limit !== undefined) stat.daily_limit = Math.max(0, parseInt(daily_limit) || 0);
   persistKeyStat(stat);
   res.json({ ok: true, stat });
+});
+
+// ─── Admin: export runs as CSV ────────────────────────────────────────────────
+app.get("/api/admin/export/runs", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("runs")
+      .select("id, created_at, user_id, request, destination, category, complexity, stakes, mode")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    const cols = ["id", "created_at", "user_id", "request", "destination", "category", "complexity", "stakes", "mode"];
+    const csvEsc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = (data || []).map(r => cols.map(c => csvEsc(r[c])).join(","));
+    const csv = [cols.join(","), ...rows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="runs-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Share routes ─────────────────────────────────────────────────────────────
