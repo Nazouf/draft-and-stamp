@@ -139,6 +139,15 @@
   .page-btn:disabled{opacity:.4;cursor:not-allowed;}
   .page-btn:not(:disabled):hover{border-color:var(--text-dim);}
 
+  /* ── filter bar ── */
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;}
+  .filter-select,.filter-date{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Public Sans',sans-serif;font-size:0.84rem;padding:6px 10px;border-radius:4px;outline:none;}
+  .filter-select:focus,.filter-date:focus{border-color:var(--text-dim);}
+  .filter-date::-webkit-calendar-picker-indicator{filter:invert(0.7);}
+  .filter-clear{background:none;border:1px solid var(--border);color:var(--text-dim);font-size:0.82rem;padding:6px 12px;border-radius:4px;}
+  .filter-clear:hover{border-color:var(--text-dim);color:var(--text);}
+  .filter-active-label{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--amber);text-transform:uppercase;letter-spacing:0.04em;margin-left:4px;}
+
   /* ── chart ── */
   .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px 24px;margin-bottom:32px;}
   .chart-title{font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);margin-bottom:16px;}
@@ -224,7 +233,7 @@
       <button class="tab-btn" data-tab="keys">API Keys</button>
     </div>
 
-    <div id="tab-runs"><div id="runs-content"></div></div>
+    <div id="tab-runs"><div id="runs-filter"></div><div id="runs-content"></div></div>
     <div id="tab-users" style="display:none;"><div id="users-content"></div></div>
     <div id="tab-feedback" style="display:none;"><div id="feedback-content"></div></div>
     <div id="tab-keys" style="display:none;"><div id="keys-content"></div></div>
@@ -249,6 +258,7 @@ let accessToken = null;
 let statsData = null;
 let currentTab = "runs";
 let runsPage = 0, usersPage = 0, feedbackPage = 0;
+let runsFilter = { category: "", destination: "", date_from: "", date_to: "" };
 
 async function adminFetch(path, opts = {}) {
   const res = await fetch(path, {
@@ -296,6 +306,7 @@ async function init() {
   renderChart();
   renderToggle();
   renderBreakdowns();
+  renderRunsFilter();
   loadRuns();
   setupTabs();
 }
@@ -441,10 +452,54 @@ async function exportCsv() {
   }
 }
 
+function renderRunsFilter() {
+  const categories = ["financial_model","presentation","writing_legal","writing","code","research","image","other"];
+  const destinations = ["claude","chatgpt","gemini","grok","perplexity","deepseek","copilot","midjourney","general"];
+  const f = runsFilter;
+  const hasFilter = Object.values(f).some(v => v);
+  document.getElementById("runs-filter").innerHTML = `
+    <div class="filter-bar">
+      <select class="filter-select" id="filter-category" onchange="applyRunsFilter()">
+        <option value="">All categories</option>
+        ${categories.map(c => `<option value="${c}" ${f.category===c?"selected":""}>${c.replace(/_/g," ")}</option>`).join("")}
+      </select>
+      <select class="filter-select" id="filter-dest" onchange="applyRunsFilter()">
+        <option value="">All destinations</option>
+        ${destinations.map(d => `<option value="${d}" ${f.destination===d?"selected":""}>${d}</option>`).join("")}
+      </select>
+      <input class="filter-date" type="date" id="filter-date-from" value="${f.date_from}" onchange="applyRunsFilter()" title="From date">
+      <span style="color:var(--text-dim);font-size:0.82rem;">→</span>
+      <input class="filter-date" type="date" id="filter-date-to" value="${f.date_to}" onchange="applyRunsFilter()" title="To date">
+      ${hasFilter ? `<button class="filter-clear" onclick="clearRunsFilter()">Clear filters</button><span class="filter-active-label">filtered</span>` : ""}
+    </div>`;
+}
+
+function applyRunsFilter() {
+  runsFilter.category    = document.getElementById("filter-category").value;
+  runsFilter.destination = document.getElementById("filter-dest").value;
+  runsFilter.date_from   = document.getElementById("filter-date-from").value;
+  runsFilter.date_to     = document.getElementById("filter-date-to").value;
+  runsPage = 0;
+  renderRunsFilter();
+  loadRuns();
+}
+
+function clearRunsFilter() {
+  runsFilter = { category: "", destination: "", date_from: "", date_to: "" };
+  runsPage = 0;
+  renderRunsFilter();
+  loadRuns();
+}
+
 async function loadRuns() {
   const el = document.getElementById("runs-content");
   el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
-  const res = await adminFetch(`/api/admin/runs?page=${runsPage}`);
+  const params = new URLSearchParams({ page: runsPage });
+  if (runsFilter.category)    params.set("category",    runsFilter.category);
+  if (runsFilter.destination) params.set("destination", runsFilter.destination);
+  if (runsFilter.date_from)   params.set("date_from",   runsFilter.date_from);
+  if (runsFilter.date_to)     params.set("date_to",     runsFilter.date_to);
+  const res = await adminFetch(`/api/admin/runs?${params}`);
   const { runs, total } = await res.json();
 
   const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">

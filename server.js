@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const APP_VERSION = "v1.14.3";
+const APP_VERSION = "v1.15.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -305,12 +305,17 @@ app.get("/api/admin/stats", requireAdmin, async (req, res) => {
 app.get("/api/admin/runs", requireAdmin, async (req, res) => {
   const page = Math.max(0, parseInt(req.query.page || "0"));
   const limit = 20;
+  const { category, destination, date_from, date_to } = req.query;
   try {
-    const { data, count, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("runs")
       .select("id, created_at, request, destination, category, complexity, mode, user_id", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(page * limit, (page + 1) * limit - 1);
+      .order("created_at", { ascending: false });
+    if (category) q = q.eq("category", category);
+    if (destination) q = q.eq("destination", destination);
+    if (date_from) q = q.gte("created_at", date_from + "T00:00:00.000Z");
+    if (date_to) q = q.lte("created_at", date_to + "T23:59:59.999Z");
+    const { data, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;
     res.json({ runs: data || [], total: count || 0, page, limit });
   } catch (err) {
