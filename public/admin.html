@@ -510,15 +510,15 @@ async function loadRuns() {
   if (!runs.length) { el.innerHTML = header + '<div style="color:var(--text-dim);padding:20px 0;">No runs yet.</div>'; return; }
 
   let html = header + `<table class="data-table"><thead><tr>
-    <th>Time</th><th>Request</th><th>Destination</th><th>Category</th><th>Mode</th><th></th>
+    <th>Time</th><th>User</th><th>Request</th><th>Destination</th><th>Category</th><th></th>
   </tr></thead><tbody>`;
   runs.forEach(r => {
     html += `<tr>
       <td class="mono">${new Date(r.created_at).toLocaleString()}</td>
-      <td><span class="truncate" style="max-width:260px;">${esc(r.request)}</span></td>
+      <td class="mono" style="font-size:0.78rem;">${esc(r.user_email || "—")}</td>
+      <td><span class="truncate" style="max-width:220px;">${esc(r.request)}</span></td>
       <td>${esc(r.destination || "—")}</td>
       <td><span class="badge badge-cat">${esc(r.category || "—")}</span></td>
-      <td class="mono">${esc(r.mode || "—")}</td>
       <td><button class="expand-btn" onclick="openRunModal('${r.id}')">View</button></td>
     </tr>`;
   });

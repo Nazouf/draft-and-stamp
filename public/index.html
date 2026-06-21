@@ -514,9 +514,12 @@
   .review-edit-area textarea{min-height:56px;margin-bottom:8px;}
   .review-edit-btns{display:flex;gap:8px;}
   /* ── History screen ──────────────────────────────────────────── */
-  .history-header{margin-bottom:20px;}
+  .history-header{margin-bottom:12px;}
   .history-title{font-size:1.35rem;font-weight:700;margin:0 0 3px;font-family:'Fraunces',serif;}
   .history-sub{color:var(--muted);font-size:0.86rem;margin:0;}
+  .history-search{width:100%;padding:8px 12px;border:1px solid var(--paper-line);border-radius:6px;background:var(--paper-soft);color:var(--ink);font-family:inherit;font-size:0.9rem;margin-bottom:16px;outline:none;}
+  .history-search:focus{border-color:var(--ink);}
+  body.dark .paper-card .history-search{background:var(--paper-soft);border-color:var(--paper-line);color:var(--ink);}
   .history-empty{color:var(--muted);font-size:0.95rem;text-align:center;padding:48px 0;}
   .history-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
   .history-card{background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:8px;overflow:hidden;}
@@ -548,7 +551,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.15.0
+    &nbsp;·&nbsp; v1.16.0
   </div>
 </div>
 
@@ -622,7 +625,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.15.0";
+const APP_VERSION  = "v1.16.0";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -1640,10 +1643,11 @@ let appInitialized = false; // true once initApp() finishes (hides loading flash
 let unrestrictedMode = true;
 let currentRunId = null;
 let authMode = "signin"; // "signin" | "signup"
-let authView = "choice"; // "choice" | "form"
+let authView = "choice"; // "choice" | "form" | "forgot"
 let authLoading = false;
 let authError = null;
 let authSuccess = null;
+let pendingPasswordRecovery = false;
 
 async function fetchIsAdmin(user){
   if (!user || !sbClient) return false;
@@ -1663,7 +1667,14 @@ async function initApp(){
     const { data: { session } } = await sbClient.auth.getSession();
     currentUser = session?.user || null;
     isAdmin = await fetchIsAdmin(currentUser);
-    sbClient.auth.onAuthStateChange(async (_event, session) => {
+    sbClient.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        currentUser = session?.user || null;
+        pendingPasswordRecovery = true;
+        authLoading = false;
+        renderAll();
+        return;
+      }
       currentUser = session?.user || null;
       authLoading = false;
       isAdmin = await fetchIsAdmin(currentUser);
@@ -1736,6 +1747,35 @@ async function signUpWithEmail(){
 async function signOut(){
   if (!sbClient) return;
   await sbClient.auth.signOut();
+}
+
+async function forgotPasswordWithEmail(){
+  if (!sbClient || authLoading) return;
+  const emailEl = document.getElementById("auth-email");
+  if (!emailEl) return;
+  const email = emailEl.value.trim();
+  if (!email){ authError = "Enter your email address."; refreshAuth(); return; }
+  authLoading = true; authError = null; refreshAuth();
+  const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  authLoading = false;
+  if (error){ authError = authMsg(error); } else { authSuccess = "Check your email for a reset link."; }
+  refreshAuth();
+}
+
+async function updatePassword(){
+  if (!sbClient || authLoading) return;
+  const field = document.getElementById("recovery-password");
+  if (!field) return;
+  const password = field.value;
+  if (password.length < 6){ authError = "Password must be at least 6 characters."; renderAll(); return; }
+  authLoading = true; authError = null; renderAll();
+  const { error } = await sbClient.auth.updateUser({ password });
+  authLoading = false;
+  if (error){ authError = authMsg(error); renderAll(); return; }
+  pendingPasswordRecovery = false;
+  authSuccess = "Password updated!";
+  renderAll();
+  setTimeout(() => { authSuccess = null; renderAll(); }, 2500);
 }
 
 async function saveRun(){
@@ -1823,6 +1863,11 @@ let historyPage = 0;
 let historyTotal = 0;
 let historyLoading = false;
 let historyExpanded = new Set();
+let historySearch = "";
+let historySearchTimer = null;
+
+let generateElapsed = 0;
+let generateTimerInterval = null;
 
 function logUsage(step, model, usage){
   state.usageEvents.push({step, model, input_tokens:usage.input_tokens||0, output_tokens:usage.output_tokens||0});
@@ -2274,6 +2319,13 @@ async function runStagePlanner(){
 }
 
 async function runGenerate(){
+  generateElapsed = 0;
+  clearInterval(generateTimerInterval);
+  generateTimerInterval = setInterval(function(){
+    generateElapsed++;
+    const el = document.getElementById("generate-timer");
+    if (el) el.textContent = generateElapsed + "s…";
+  }, 1000);
   state.screen = "generating_loading"; state.error = null; renderAll();
   try{
     const { text, usage } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, true, STRONG_MODEL);
@@ -2287,12 +2339,14 @@ async function runGenerate(){
         content: p.content || ""
       }))
     };
+    clearInterval(generateTimerInterval); generateTimerInterval = null;
     logUsage("generate", STRONG_MODEL, usage);
     await finalizeSession();
     state.screen = "result";
     renderAll();
     startTypewriter();
   } catch(e){
+    clearInterval(generateTimerInterval); generateTimerInterval = null;
     state.error = { step:"generate", message:e.message };
     renderAll();
   }
@@ -2498,6 +2552,12 @@ function toggleDarkMode(){
   renderTopbar();
 }
 
+function onHistorySearch(val){
+  historySearch = val;
+  clearTimeout(historySearchTimer);
+  historySearchTimer = setTimeout(function(){ loadHistory(0); }, 350);
+}
+
 async function loadHistory(pageNum){
   historyLoading = true;
   if (pageNum === 0){ historyRuns = []; historyExpanded = new Set(); }
@@ -2506,7 +2566,9 @@ async function loadHistory(pageNum){
   try{
     const session = await sbClient.auth.getSession();
     const token = session.data.session && session.data.session.access_token;
-    const resp = await fetch("/api/runs?page=" + pageNum, {
+    let url = "/api/runs?page=" + pageNum;
+    if (historySearch.trim()) url += "&q=" + encodeURIComponent(historySearch.trim());
+    const resp = await fetch(url, {
       headers: token ? { "Authorization": "Bearer " + token } : {}
     });
     const json = await resp.json();
@@ -2530,8 +2592,9 @@ function renderHistory(){
   };
   let html = '<div class="history-header">' +
     '<h2 class="history-title">My Prompts</h2>' +
-    '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + " saved" : "Your saved prompts appear here") + '</p>' +
-  '</div>';
+    '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + (historySearch.trim() ? " matching &ldquo;" + esc(historySearch.trim()) + "&rdquo;" : " saved") : "Your saved prompts appear here") + '</p>' +
+  '</div>' +
+  '<input type="search" class="history-search" placeholder="Search prompts…" value="' + esc(historySearch) + '" oninput="onHistorySearch(this.value)">';
 
   if (!historyLoading && historyRuns.length === 0){
     html += '<div class="history-empty">No runs yet — start drafting to see your history here.</div>';
@@ -2905,10 +2968,58 @@ function authFormHTML(isSignUp, includeClose){
     '<button class="btn btn-primary" data-action="auth-submit" style="width:100%;margin-top:4px;" ' + (authLoading ? 'disabled' : '') + '>' +
       (authLoading ? 'Please wait…' : (isSignUp ? 'Create account' : 'Sign in')) +
     '</button>' +
+    (!isSignUp ? '<button class="auth-toggle" data-action="auth-forgot" style="font-size:0.8rem;margin-top:6px;">Forgot password?</button>' : '') +
     '<button class="auth-toggle" data-action="auth-toggle">' +
       (isSignUp ? "Already have an account? Sign in" : "No account yet? Sign up free") +
     '</button>' +
     '<button class="auth-toggle" data-action="auth-back" style="margin-top:6px;">← Back to options</button>';
+}
+
+function authForgotHTML(includeClose){
+  return (includeClose ? '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' : '') +
+    '<h2 class="auth-title">Reset password</h2>' +
+    '<p class="auth-sub">Enter your email and we\'ll send you a reset link.</p>' +
+    (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
+    (authError   ? '<div class="auth-msg auth-error">'   + esc(authError)   + '</div>' : '') +
+    '<input type="email" id="auth-email" class="auth-input" placeholder="Email" autocomplete="email">' +
+    '<button class="btn btn-primary" data-action="auth-submit-forgot" style="width:100%;margin-top:4px;" ' + (authLoading ? 'disabled' : '') + '>' +
+      (authLoading ? 'Sending…' : 'Send reset link') +
+    '</button>' +
+    '<button class="auth-toggle" data-action="auth-back-to-signin" style="margin-top:6px;">← Back to sign in</button>';
+}
+
+function wireAuthForgot(){
+  const closeBtn = document.getElementById("auth-close-btn");
+  const emailField = document.getElementById("auth-email");
+  if (closeBtn) closeBtn.onclick = closeLogin;
+  if (emailField) emailField.onkeydown = function(e){ if (e.key === "Enter") forgotPasswordWithEmail(); };
+}
+
+function renderUpdatePasswordScreen(){
+  return '<h2 class="auth-title" style="margin-bottom:8px;">Set new password</h2>' +
+    '<p class="auth-sub">Choose a new password for your account.</p>' +
+    (authSuccess ? '<div class="auth-msg auth-success">' + esc(authSuccess) + '</div>' : '') +
+    (authError   ? '<div class="auth-msg auth-error">'   + esc(authError)   + '</div>' : '') +
+    '<div class="auth-pw-wrap">' +
+      '<input type="password" id="recovery-password" class="auth-input" placeholder="New password (6+ chars)" autocomplete="new-password">' +
+      '<button type="button" class="auth-pw-toggle" id="recovery-pw-toggle" tabindex="-1">Show</button>' +
+    '</div>' +
+    '<button class="btn btn-primary" data-action="auth-update-password" style="width:100%;margin-top:4px;" ' + (authLoading ? 'disabled' : '') + '>' +
+      (authLoading ? 'Updating…' : 'Update password') +
+    '</button>';
+}
+
+function wireUpdatePasswordForm(){
+  const toggle = document.getElementById("recovery-pw-toggle");
+  const field  = document.getElementById("recovery-password");
+  if (toggle && field){
+    toggle.onclick = function(){
+      const showing = field.type === "text";
+      field.type = showing ? "password" : "text";
+      this.textContent = showing ? "Show" : "Hide";
+    };
+  }
+  if (field) field.onkeydown = function(e){ if (e.key === "Enter") updatePassword(); };
 }
 
 // Wires only what data-action can't handle: close button, Enter key, password reveal.
@@ -2955,6 +3066,9 @@ function renderAuthModal(){
   if (authView === "choice"){
     box.innerHTML = authChoiceHTML(true);
     wireAuthChoice();
+  } else if (authView === "forgot"){
+    box.innerHTML = authForgotHTML(true);
+    wireAuthForgot();
   } else {
     const isSignUp = authMode === "signup";
     box.innerHTML = authFormHTML(isSignUp, true);
@@ -2964,9 +3078,16 @@ function renderAuthModal(){
 
 function renderAuthScreen(){
   const isSignUp = authMode === "signup";
-  const formHTML = sbClient
-    ? (authView === "choice" ? authChoiceHTML(false) : authFormHTML(isSignUp, false))
-    : '<p style="color:var(--muted);">Auth not configured — check server env vars.</p>';
+  let formHTML;
+  if (!sbClient){
+    formHTML = '<p style="color:var(--muted);">Auth not configured — check server env vars.</p>';
+  } else if (authView === "choice"){
+    formHTML = authChoiceHTML(false);
+  } else if (authView === "forgot"){
+    formHTML = authForgotHTML(false);
+  } else {
+    formHTML = authFormHTML(isSignUp, false);
+  }
   return '<h1 class="title">Draft &amp; Stamp</h1>' +
     '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
     '<p class="meta-caption" style="margin-bottom:30px;">Sign in to get started — free during beta.</p>' +
@@ -2989,10 +3110,18 @@ function renderAll(){
     return;
   }
 
+  if (pendingPasswordRecovery){
+    app.innerHTML = renderUpdatePasswordScreen();
+    wireUpdatePasswordForm();
+    return;
+  }
+
   if (!currentUser){
     body = renderAuthScreen();
     app.innerHTML = body;
-    if (authView === "choice") wireAuthChoice(); else wireAuthForm(authMode === "signup");
+    if (authView === "choice") wireAuthChoice();
+    else if (authView === "forgot") wireAuthForgot();
+    else wireAuthForm(authMode === "signup");
     return;
   }
 
@@ -3007,7 +3136,7 @@ function renderAll(){
     case "interview": body = renderInterview(); break;
     case "staging_loading": body = renderLoading("Planning how to break this into stages…"); break;
     case "staged": body = renderStaged(); break;
-    case "generating_loading": body = renderLoading("Writing your prompt…"); break;
+    case "generating_loading": body = '<p class="loading-line">Writing your prompt… <span id="generate-timer" style="color:var(--muted);font-size:0.9em;">' + (generateElapsed > 0 ? generateElapsed + "s…" : "") + '</span><span class="cursor">▌</span></p>'; break;
     case "result": body = renderResult(); break;
     case "review": body = renderReview(); break;
     case "history": body = renderHistory(); break;
@@ -3229,6 +3358,16 @@ document.getElementById("app").addEventListener("click", function(e){
     case "auth-back":
       authView = "choice"; authError = null; authSuccess = null;
       refreshAuth(); break;
+    case "auth-forgot":
+      authView = "forgot"; authError = null; authSuccess = null;
+      refreshAuth(); break;
+    case "auth-back-to-signin":
+      authView = "form"; authMode = "signin"; authError = null; authSuccess = null;
+      refreshAuth(); break;
+    case "auth-submit-forgot":
+      forgotPasswordWithEmail(); break;
+    case "auth-update-password":
+      updatePassword(); break;
     case "auth-submit":
       if (authMode === "signup") signUpWithEmail(); else signInWithEmail();
       break;

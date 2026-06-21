@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const APP_VERSION = "v1.15.0";
+const APP_VERSION = "v1.16.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -222,13 +222,15 @@ app.get("/api/runs", async (req, res) => {
   if (!user) return res.status(401).json({ error: "Unauthorized" });
   const page = Math.max(0, parseInt(req.query.page || "0"));
   const limit = 12;
+  const search = (req.query.q || "").trim();
   try {
-    const { data, count, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("runs")
       .select("id, created_at, request, destination, category, complexity, generated_prompts", { count: "exact" })
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .range(page * limit, (page + 1) * limit - 1);
+      .order("created_at", { ascending: false });
+    if (search) q = q.ilike("request", "%" + search + "%");
+    const { data, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;
     res.json({ runs: data || [], total: count || 0, page, limit });
   } catch (err) {
@@ -315,9 +317,15 @@ app.get("/api/admin/runs", requireAdmin, async (req, res) => {
     if (destination) q = q.eq("destination", destination);
     if (date_from) q = q.gte("created_at", date_from + "T00:00:00.000Z");
     if (date_to) q = q.lte("created_at", date_to + "T23:59:59.999Z");
-    const { data, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
+    const { data: runs, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;
-    res.json({ runs: data || [], total: count || 0, page, limit });
+    if (runs && runs.length) {
+      const userIds = [...new Set(runs.map(r => r.user_id).filter(Boolean))];
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, email").in("id", userIds);
+      const emailMap = Object.fromEntries((profiles || []).map(p => [p.id, p.email]));
+      runs.forEach(r => { r.user_email = emailMap[r.user_id] || null; });
+    }
+    res.json({ runs: runs || [], total: count || 0, page, limit });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
