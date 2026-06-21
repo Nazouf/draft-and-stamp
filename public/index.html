@@ -537,7 +537,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.14.1
+    &nbsp;·&nbsp; v1.14.2
   </div>
 </div>
 
@@ -774,9 +774,14 @@ or am I pattern-matching to a checklist?"
   share or if capital structure is mentioned / plausible for the company type.
 - TERMINAL VALUE SENSITIVITY: Terminal value often represents 60–80% of DCF
   enterprise value. Only flag if a DCF is explicitly in scope.
-- ACCOUNTING FRAMEWORK: Which country? Which standard (IFRS, US GAAP, local
-  GAAP)? Only flag if the model will be shared externally or if the jurisdiction
-  is ambiguous and reporting format matters for the use case.
+- ACCOUNTING FRAMEWORK: Only flag if there is genuine ambiguity or cross-border
+  complexity — for example, a company with a dual listing, a subsidiary in a
+  different jurisdiction, or a request that explicitly references multiple
+  countries. Do NOT flag for a company that clearly operates in a single country
+  with a well-known dominant standard (e.g. a Pakistani PSX-listed company uses
+  IFRS-converged standards; an Indian NSE/BSE-listed company uses Ind AS; a US
+  company uses US GAAP). When the country is unambiguous and there is no signal
+  of cross-border complexity, extract the framework silently — do not ask.
 
 FOR PROFESSIONAL / CLIENT-FACING REQUESTS (not regulated, but consequential):
 Think like a senior colleague who has delivered this type of work to an
@@ -909,9 +914,17 @@ Two hard disqualifiers — never ask a question that fails either:
    names "Bestway Cements" and your example would say "Yes, on the Pakistan Stock
    Exchange under ticker BWCL" — do NOT write it as a normal question with that
    answer hidden in the example. Instead, use the PREFILL pattern below.
-2. ALREADY IN THE REQUEST: Re-read the original request word for word before
-   writing each question. If the person already stated or clearly implied the
-   answer — even indirectly — do not ask. Extract it silently instead.
+2. ALREADY KNOWN: Re-read the original request word for word before writing
+   each question. Do not ask if:
+   a) The person already stated or clearly implied the answer — even indirectly.
+   b) The answer is a no-brainer default given the named entity, location, or
+      industry — with no signal in the request suggesting otherwise. Examples:
+      a PSX-listed Pakistani company → IFRS-converged, PKR, Pakistani law;
+      a US company with no foreign mention → US GAAP, USD;
+      a local service business (delivery, retail, law firm) → no FX exposure;
+      a software/platform/intermediary → no commodity input risk.
+   In these cases, extract the answer silently and move on. Never ask a question
+   just to confirm something that has one obvious answer and no ambiguity signal.
 
 <prefill_pattern>
 When you can infer the likely answer from the request (e.g. a named company
