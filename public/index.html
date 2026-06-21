@@ -261,6 +261,7 @@
     font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;line-height:1.35;margin:0 0 6px;
   }
   .question-hint{color:var(--muted);font-size:0.85rem;font-style:italic;margin-bottom:18px;}
+  .prefill-note{font-size:0.8rem;color:var(--muted);margin-bottom:6px;}
   .question-priority-badge{display:inline-block;font-size:0.72rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#1a5276;background:#d6eaf8;border:1px solid #aed6f1;border-radius:4px;padding:2px 7px;margin-bottom:10px;}
   .option-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
   .option-btn{
@@ -536,7 +537,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.14.0
+    &nbsp;·&nbsp; v1.14.1
   </div>
 </div>
 
@@ -903,14 +904,28 @@ explicitly avoid — over questions that only narrow preferences, especially
 once the easy preference questions are out of the way.
 
 Two hard disqualifiers — never ask a question that fails either:
-1. EXAMPLE SELF-ANSWER: If the example answer you would write for the question
-   essentially discloses the answer — for instance the hint says "e.g. Yes, on
-   the Pakistan Stock Exchange under ticker EFERT" and the company's exchange and
-   ticker are already obvious from the original request — the question is
-   performative. Skip it.
+1. EXAMPLE SELF-ANSWER: If the answer you would put in the example essentially
+   discloses what the person almost certainly meant — for instance, the request
+   names "Bestway Cements" and your example would say "Yes, on the Pakistan Stock
+   Exchange under ticker BWCL" — do NOT write it as a normal question with that
+   answer hidden in the example. Instead, use the PREFILL pattern below.
 2. ALREADY IN THE REQUEST: Re-read the original request word for word before
    writing each question. If the person already stated or clearly implied the
    answer — even indirectly — do not ask. Extract it silently instead.
+
+<prefill_pattern>
+When you can infer the likely answer from the request (e.g. a named company
+whose exchange and ticker are well-known), use the prefill field rather than
+burying the answer in an example. Set:
+- input_type to "free_text"
+- prefill to the inferred answer as a plain string (e.g. "Yes — Pakistan Stock
+  Exchange (PSX), ticker BWCL")
+- The question text should frame it as a confirmation: "We think [X] — does
+  that look right? Correct anything that's off." Use the actual inferred value
+  in the question text so the person can immediately see what was assumed.
+This lets the person confirm in one click or type a correction, instead of
+re-entering what the system already knows.
+</prefill_pattern>
 </what_makes_a_good_question>
 
 <identifying_details_come_first>
@@ -1910,7 +1925,8 @@ const SELECT_QUESTION_SCHEMA = {
         },
         hint:{ type:"string", nullable:true },
         covers_topic_id:{ type:"string", nullable:true },
-        priority:{ type:"string", enum:["critical","enrichment"], nullable:true }
+        priority:{ type:"string", enum:["critical","enrichment"], nullable:true },
+        prefill:{ type:"string", nullable:true }
       },
       required:["id","text","input_type"]
     }
@@ -2181,7 +2197,7 @@ async function runSelectQuestion(forceTopic){
       state.currentQuestion = json.next_question;
       state.multiSelections = [];
       state.customAnswerMode = false;
-      state.freeTextDraft = "";
+      state.freeTextDraft = json.next_question.prefill || "";
       state.screen = "interview";
       renderAll();
     }
@@ -2664,9 +2680,11 @@ function renderOptionInput(q){
     '<div class="btn-row"><button class="btn btn-primary" data-action="submit-slider">Continue</button></div>' +
     renderCustomToggle(q);
   }
-  // free_text
-  return '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
-    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Continue</button></div>';
+  // free_text — show a prefill note if the value was inferred from context
+  const hasPrefill = q.prefill && state.freeTextDraft === q.prefill;
+  return (hasPrefill ? '<p class="prefill-note">Inferred from your request — edit if anything\'s off.</p>' : '') +
+    '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Confirm</button></div>';
 }
 
 function renderInterview(){
@@ -2800,8 +2818,15 @@ function renderLedger(){
 
 function renderErrorBanner(){
   if (!state.error) return '';
-  return '<div class="error-banner">Something went wrong during the ' + esc(state.error.step.replace(/_/g," ")) + ' step: ' + esc(state.error.message) +
-    '<div class="btn-row"><button class="btn btn-primary" data-action="retry">Try again</button><button class="btn" data-action="start-over">Start over</button></div></div>';
+  const msg = state.error.message || "";
+  const isCapacity = msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("unavailable");
+  const heading = isCapacity ? "Service temporarily at capacity" : "Something went wrong";
+  const body = isCapacity
+    ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
+    : msg;
+  const retryLabel = isCapacity ? "Retry" : "Try again";
+  return '<div class="error-banner"><strong>' + esc(heading) + '</strong><p style="margin:6px 0 12px;">' + esc(body) + '</p>' +
+    '<div class="btn-row"><button class="btn btn-primary" data-action="retry">' + retryLabel + '</button><button class="btn" data-action="start-over">Start over</button></div></div>';
 }
 
 function authChoiceHTML(includeClose){

@@ -108,7 +108,7 @@ async function callWithRotation(model, body) {
 
   return {
     status: 429,
-    data: { error: { message: `All API keys are unavailable (disabled or at their daily limit). Try again later or enable more keys in the admin panel.` } }
+    data: { error: { message: `All API keys are unavailable (disabled or at their daily limit).` } }
   };
 }
 
@@ -174,8 +174,11 @@ app.post("/api/gemini", async (req, res) => {
     return res.status(500).json({ error: { message: "No API keys configured. Add GEMINI_API_KEY to .env and restart." } });
   }
 
+  // Allow unauthenticated calls from localhost (test runner)
+  const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+
   // Enforce limits only when Supabase is connected and unrestricted mode is off.
-  if (supabaseAdmin) {
+  if (supabaseAdmin && !isLocalhost) {
     const unrestricted = await getUnrestrictedMode();
     if (!unrestricted) {
       const user = await verifyUser(req);
