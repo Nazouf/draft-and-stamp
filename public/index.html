@@ -441,6 +441,19 @@
   .skip-btn{display:block;background:none;border:none;color:var(--muted);font-size:0.8rem;cursor:pointer;font-family:inherit;margin:4px 0 14px;text-decoration:underline;text-underline-offset:2px;padding:0;}
   .skip-btn:hover{color:var(--ink);}
   /* ── History screen ─────────────────────────────────────────── */
+  /* ── Review-answers screen ──────────────────────────────────────*/
+  .review-list{display:flex;flex-direction:column;gap:7px;margin:18px 0 22px;}
+  .review-row{background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:6px;padding:12px 14px;}
+  .review-row-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .review-q{font-size:0.8rem;color:var(--muted);margin-bottom:3px;line-height:1.4;}
+  .review-a{font-size:0.92rem;color:var(--ink);font-weight:500;line-height:1.4;}
+  .review-a-skipped{font-style:italic;color:var(--muted);font-weight:400;}
+  .review-edit-btn{background:none;border:1px solid var(--paper-line);color:var(--muted);font-size:0.72rem;font-family:inherit;padding:3px 9px;border-radius:4px;cursor:pointer;flex-shrink:0;margin-top:1px;}
+  .review-edit-btn:hover{color:var(--ink);border-color:var(--ink);}
+  .review-edit-area{margin-top:8px;}
+  .review-edit-area textarea{min-height:56px;margin-bottom:8px;}
+  .review-edit-btns{display:flex;gap:8px;}
+  /* ── History screen ──────────────────────────────────────────── */
   .history-header{margin-bottom:20px;}
   .history-title{font-size:1.35rem;font-weight:700;margin:0 0 3px;font-family:'Fraunces',serif;}
   .history-sub{color:var(--muted);font-size:0.86rem;margin:0;}
@@ -475,7 +488,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.9.1
+    &nbsp;·&nbsp; v1.10.0
   </div>
 </div>
 
@@ -1582,6 +1595,10 @@ function freshState(){
 }
 let state = freshState();
 
+// Review-answers screen state
+let reviewEditIndex = null;
+let reviewEditValue = "";
+
 // History screen state — outside freshState() so startOver() doesn't clear it
 let historyRuns = [];
 let historyPage = 0;
@@ -2000,6 +2017,13 @@ function submitAnswer(answerLabel){
 }
 
 function proceedAfterInterview(){
+  state.screen = "review";
+  reviewEditIndex = null;
+  reviewEditValue = "";
+  renderAll();
+}
+
+function confirmGenerate(){
   const c = state.classification;
   if (c.complexity === "big") runStagePlanner(); else runGenerate();
 }
@@ -2093,6 +2117,46 @@ function backToStart(){
 function esc(s){
   return String(s == null ? "" : s)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderReview(){
+  const qa = state.qaHistory;
+  let html = '<div class="stamp-wrap"><span class="stamp">Review your answers</span></div>' +
+    '<p class="stamp-sub">Edit anything before we write your prompt — or just hit Generate.</p>' +
+    '<div class="review-list">';
+
+  qa.forEach(function(item, i){
+    const isEditing = reviewEditIndex === i;
+    const isSkipped = item.answer === "(skipped)";
+    html += '<div class="review-row">';
+    if (isEditing){
+      html += '<div class="review-q">' + esc(item.text) + '</div>' +
+        '<div class="review-edit-area">' +
+          '<textarea id="review-edit-input">' + esc(reviewEditValue) + '</textarea>' +
+          '<div class="review-edit-btns">' +
+            '<button class="btn btn-primary btn-small" data-action="review-save" data-value="' + i + '">Save</button>' +
+            '<button class="btn btn-small" data-action="review-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      html += '<div class="review-row-head">' +
+        '<div>' +
+          '<div class="review-q">' + esc(item.text) + '</div>' +
+          '<div class="review-a' + (isSkipped ? ' review-a-skipped' : '') + '">' +
+            esc(isSkipped ? 'Skipped — not answered' : item.answer) +
+          '</div>' +
+        '</div>' +
+        '<button class="review-edit-btn" data-action="review-edit" data-value="' + i + '">Edit</button>' +
+      '</div>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>' +
+    '<div class="btn-row" style="justify-content:center;">' +
+      '<button class="btn btn-primary" data-action="confirm-generate">Generate prompt</button>' +
+    '</div>';
+  return html;
 }
 
 async function loadHistory(pageNum){
@@ -2569,6 +2633,7 @@ function renderAll(){
     case "staged": body = renderStaged(); break;
     case "generating_loading": body = renderLoading("Writing your prompt…"); break;
     case "result": body = renderResult(); break;
+    case "review": body = renderReview(); break;
     case "history": body = renderHistory(); break;
     default: body = renderStart();
   }
@@ -2704,6 +2769,7 @@ async function submitFeedback(){
 document.getElementById("app").addEventListener("input", function(e){
   if (e.target.id === "request-input") state.originalRequest = e.target.value;
   else if (e.target.id === "free-text-input") state.freeTextDraft = e.target.value;
+  else if (e.target.id === "review-edit-input") reviewEditValue = e.target.value;
   else if (e.target.id === "fb-comment") state.feedbackComment = e.target.value;
   else if (e.target.id === "slider-input") {
     const num = document.getElementById("slider-live-num");
@@ -2748,6 +2814,27 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     }
     case "skip-question": submitAnswer("(skipped)"); break;
+    case "review-edit": {
+      const i = parseInt(el.dataset.value, 10);
+      reviewEditIndex = i;
+      const cur = state.qaHistory[i].answer;
+      reviewEditValue = cur === "(skipped)" ? "" : cur;
+      renderAll();
+      const ta = document.getElementById("review-edit-input");
+      if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      break;
+    }
+    case "review-cancel":
+      reviewEditIndex = null; reviewEditValue = ""; renderAll(); break;
+    case "review-save": {
+      const i = parseInt(el.dataset.value, 10);
+      const ta = document.getElementById("review-edit-input");
+      const val = (ta ? ta.value : reviewEditValue).trim();
+      if (val) state.qaHistory[i].answer = val;
+      reviewEditIndex = null; reviewEditValue = "";
+      renderAll(); break;
+    }
+    case "confirm-generate": confirmGenerate(); break;
     case "regenerate": regenerate(); break;
     case "continue-after-staging": runGenerate(); break;
     case "retry": retryLastStep(); break;
