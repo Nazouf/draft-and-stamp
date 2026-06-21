@@ -9,6 +9,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
+const APP_VERSION = "v1.14.3";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -152,6 +153,10 @@ async function requireAdmin(req, res, next) {
 }
 
 // ─── Admin page route ─────────────────────────────────────────────────────────
+app.get("/api/version", (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });

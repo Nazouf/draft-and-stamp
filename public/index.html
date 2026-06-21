@@ -211,6 +211,17 @@
     color:var(--red);padding:12px 14px;border-radius:4px;font-size:0.9rem;
   }
   .start-error{color:var(--red);font-size:0.85rem;margin-top:8px;}
+  .update-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:#EAF4EA;border:1.5px solid #5a9e5a;border-radius:6px;
+    padding:10px 14px;margin-bottom:18px;font-size:0.875rem;color:#2d5a2d;}
+  .update-banner-text{flex:1;}
+  .update-banner-btn{flex-shrink:0;background:#2d5a2d;color:#fff;border:none;
+    border-radius:4px;padding:5px 12px;font-size:0.82rem;font-family:inherit;
+    cursor:pointer;white-space:nowrap;}
+  .update-banner-btn:hover{background:#1e3d1e;}
+  body.dark .update-banner{background:#1a2e1a;border-color:#4a7c4a;color:#a8d4a8;}
+  body.dark .update-banner-btn{background:#4a7c4a;color:#fff;}
+  body.dark .update-banner-btn:hover{background:#3a6a3a;}
 
   /* ---------- loading ---------- */
   .loading-line{
@@ -537,7 +548,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.14.2
+    &nbsp;·&nbsp; v1.14.3
   </div>
 </div>
 
@@ -611,6 +622,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
+const APP_VERSION  = "v1.14.3";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -1788,6 +1800,7 @@ function freshState(){
     decisionsOpen:false,
     ledgerOpen:false,
     topicsOpen:false,
+    updateAvailable:false,
     _stampTimer:null,
     _typeInterval:null
   };
@@ -2310,6 +2323,24 @@ function retryLastStep(){
   else if (step === "generate") runGenerate();
 }
 
+async function checkForUpdate(){
+  try {
+    const res = await fetch("/api/version");
+    if (!res.ok) return;
+    const { version } = await res.json();
+    if (version && version !== APP_VERSION && !state.updateAvailable){
+      state.updateAvailable = true;
+      renderAll();
+    }
+  } catch(e){ /* network error — ignore */ }
+}
+
+// Check once after a short delay, then every 5 minutes.
+// Only matters on the start screen; the flag persists so it'll show when the
+// user gets back there even if it fired while they were mid-flow.
+setTimeout(checkForUpdate, 3000);
+setInterval(checkForUpdate, 5 * 60 * 1000);
+
 function startOver(){
   clearTimeout(state._stampTimer);
   clearInterval(state._typeInterval);
@@ -2586,7 +2617,13 @@ function destinationPills(){
 
 
 function renderStart(){
-  return '' +
+  const updateBanner = state.updateAvailable
+    ? '<div class="update-banner">' +
+        '<span class="update-banner-text">A newer version of Draft &amp; Stamp is available.</span>' +
+        '<button class="update-banner-btn" data-action="refresh-to-update">Refresh to update</button>' +
+      '</div>'
+    : '';
+  return updateBanner +
     '<h1 class="title">Draft &amp; Stamp</h1>' +
     '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 18px;">your personal prompt engineer</p>' +
     '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
@@ -3178,6 +3215,7 @@ document.getElementById("app").addEventListener("click", function(e){
     case "continue-after-staging": runGenerate(); break;
     case "retry": retryLastStep(); break;
     case "start-over": startOver(); break;
+    case "refresh-to-update": window.location.reload(true); break;
     case "back-to-start": backToStart(); break;
     case "open-login": openLogin(); break;
     case "sign-out": signOut(); break;
