@@ -261,6 +261,7 @@
     font-family:'Fraunces',serif;font-weight:600;font-size:1.3rem;line-height:1.35;margin:0 0 6px;
   }
   .question-hint{color:var(--muted);font-size:0.85rem;font-style:italic;margin-bottom:18px;}
+  .question-priority-badge{display:inline-block;font-size:0.72rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#1a5276;background:#d6eaf8;border:1px solid #aed6f1;border-radius:4px;padding:2px 7px;margin-bottom:10px;}
   .option-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
   .option-btn{
     text-align:left;border:1.5px solid var(--paper-line);background:var(--paper-soft);
@@ -478,6 +479,7 @@
   body.dark .paper-card .note-assumptions{background:#2A1E1E;border-color:var(--red);}
   body.dark .paper-card .note-stakes{background:#2A220E;}
   body.dark .paper-card .pending-topics{background:#2A220E;}
+  body.dark .question-priority-badge{color:#aed6f1;background:#1a3a52;border-color:#2e6a94;}
 
   /* ── Shared result view ─────────────────────────────────────────*/
   .share-btn{background:none;border:none;color:var(--red);font-size:0.8rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-family:inherit;padding:0 0 0 8px;}
@@ -534,7 +536,7 @@
   </div>
   <div class="footer">
     Draft &amp; Stamp — prompts that actually work.
-    &nbsp;·&nbsp; v1.13.0
+    &nbsp;·&nbsp; v1.14.0
   </div>
 </div>
 
@@ -651,7 +653,9 @@ any prompts, questions, or advice — only this classification.
      involves a multi-year forecast, equity valuation, or DCF analysis; or would
      take a professional several hours to do well.
    - "small" otherwise. Judge by implication, not word count.
-4. Separately, decide stakes — NOT the same axis as complexity. Set to "sensitive" if:
+4. Separately, decide stakes — NOT the same axis as complexity. Three levels:
+
+   Set to "sensitive" if:
    - Regulated domain: securities/investment advice, lending/credit, healthcare,
      legal, tax, insurance, employment/hiring, real estate appraisal
    - Involves an equity valuation or investment recommendation for any real
@@ -664,9 +668,21 @@ any prompts, questions, or advice — only this classification.
      gives no indication of which jurisdiction
    - Errors would cause real financial, legal, reputational, or physical harm
      to someone other than the requester
-   Set to "routine" otherwise. Default "routine" for purely creative or personal
-   tasks with no external reliance; default "sensitive" for anything touching
-   real money decisions, real people's life outcomes, or regulated institutions.
+
+   Set to "professional" if NOT sensitive but:
+   - The output is client-facing or goes to an external audience who will judge
+     it (e.g. a client presentation, an investor pitch deck, a business
+     proposal, a research report for a meeting, a report for a manager or
+     board)
+   - Getting key details wrong would cause embarrassment, lost business, or
+     real professional consequences — but does not cross into regulated territory
+   - The person's professional reputation depends on the output being accurate
+     and well-structured
+   Examples: investment reports that don't give personal advice, pitch decks,
+   client briefings, board reports, proposals to external parties.
+
+   Set to "routine" otherwise — personal tasks, internal drafts, creative work,
+   purely exploratory tasks with no external audience or professional consequence.
 5. Detect the intended output format from the request:
    - "excel_file" if the request mentions excel, spreadsheet, xlsx, xls, "in excel", "excel model", "excel based", or similar
    - "presentation_file" if it mentions slide deck, PowerPoint, ppt, presentation slides
@@ -676,6 +692,17 @@ any prompts, questions, or advice — only this classification.
    - "auto" if no specific output format is indicated — this is the default
 6. Give a confidence score from 0 to 1.
 7. Give a one-sentence internal reasoning — the user never sees this.
+8. Detect contradictions: if the request contains requirements that are in
+   direct tension with each other, list each as a plain-language string in
+   the contradictions array. Common patterns to catch:
+   - Length contradictions: "very short" + "extremely detailed/comprehensive",
+     "brief" + "cover everything", "quick" + "thorough"
+   - Audience contradictions: "beginner-friendly" + "highly technical"
+   - Scope contradictions: "simple" + "complete/full/from scratch"
+   - Tone contradictions: "casual" + "formal/professional"
+   Leave contradictions empty or null if no genuine tension exists.
+   Example: ["'Very short' conflicts with 'extremely detailed' — clarify
+   whether brevity or completeness takes priority."]
 </task>
 
 If the request is too vague to classify confidently, still produce your best
@@ -709,44 +736,63 @@ Use this as a thinking framework — apply only what genuinely fits this request
 FOR FINANCIAL MODEL REQUESTS (equity valuations, DCF, forecasts, budgets):
 Think like a CFA charterholder or investment banker reviewing the brief.
 
+CRITICAL RULE — relevance before flagging: Read the actual request carefully.
+Only surface a consideration if it genuinely applies to THIS specific business
+or request. Do NOT fire generic financial-model flags at every request.
+Ask yourself: "Would a real expert flag this gap for THIS company and scope,
+or am I pattern-matching to a checklist?"
+
 - DATA SOURCING & BASE YEAR: Is real company data needed? What is the most
   recent fiscal year with complete published financials — is that pinned as
-  the model's base year? Floating this creates forecast ambiguity. Are the
-  financials available (annual report, exchange filing, Refinitiv, Bloomberg)?
-- FOREIGN EXCHANGE EXPOSURE: Does the company earn revenues in a different
-  currency from its costs? Export-heavy manufacturers (textiles, commodities,
-  electronics), multinationals, and import-dependent businesses all have
-  cross-currency P&Ls. Ignoring FX in these cases makes the model structurally
-  wrong — it is not an optional sensitivity, it is a primary earnings driver.
-- COMMODITY AND INPUT PRICE RISK: Are key costs tied to external commodity
-  prices (cotton, yarn, steel, oil, wheat, energy, freight)? In manufacturing
-  and agriculture, raw material cost is often 50–70% of COGS. If this isn't
-  modeled as an explicit assumption and sensitivity variable, the forecast will
-  be unreliable under any market movement.
+  the model's base year? Only flag if the request names a real company or
+  requires real historical data — not for illustrative/startup/hypothetical models.
+- FOREIGN EXCHANGE EXPOSURE: ONLY flag this if the business plausibly has FX
+  exposure — export/import businesses, manufacturers selling abroad, companies
+  with foreign costs, multinationals. Do NOT flag for domestic-only businesses
+  (local delivery platforms, local service firms, domestic retailers) — a
+  domestic food delivery startup, a local law firm, a Pakistan-only retailer
+  have no material FX exposure and asking about it wastes the person's time.
+- COMMODITY AND INPUT PRICE RISK: ONLY flag if the business directly purchases
+  commodities or raw materials with volatile prices — manufacturing, agriculture,
+  energy, textiles, construction. Do NOT flag for service businesses, software
+  companies, platforms, or intermediaries that don't directly buy physical inputs.
+  A food delivery platform doesn't buy food; its restaurant partners do.
 - VALUATION COMPLETENESS: For equity valuations of listed companies, a DCF
   alone is not investment-grade analysis. Professional valuation always
   cross-checks intrinsic value against market multiples from comparable listed
-  peers (EV/EBITDA, P/E, P/B, EV/Revenue depending on sector). Missing this
-  means the intrinsic value has no sanity-check anchor.
-- MARKET PRICE COMPARISON: For listed equity, computing an intrinsic value
-  without comparing it to the current market price leaves the analysis with
-  no actionable conclusion. The gap between intrinsic value and market price
-  is the investment thesis.
-- COUNTRY RISK PREMIUM: For companies in emerging or frontier markets, the
-  WACC must include a country risk premium on top of local risk-free rates
-  and standard equity risk premiums. Omitting this systematically understates
-  the discount rate and overstates intrinsic value.
-- CAPITAL STRUCTURE COMPLEXITY: Significant existing debt affects WACC,
-  interest coverage ratios, and the bridge from enterprise value to equity
-  value. Convertibles, warrants, or recent equity raises affect diluted share
-  count and per-share intrinsic value.
+  peers (EV/EBITDA, P/E, P/B, EV/Revenue depending on sector). Only flag if
+  the request is for a listed equity or explicitly an investor-grade valuation.
+- MARKET PRICE COMPARISON: For listed equity only — computing intrinsic value
+  without comparing to the current market price leaves the analysis with no
+  actionable conclusion. Skip entirely for private companies.
+- COUNTRY RISK PREMIUM: For companies in emerging or frontier markets where
+  a DCF/WACC is being computed. Only flag if the model requires a WACC
+  calculation — not for simple budgets or forecasts without valuation.
+- CAPITAL STRUCTURE COMPLEXITY: Significant existing debt, convertibles, or
+  recent equity raises. Only flag if the model bridges to equity value per
+  share or if capital structure is mentioned / plausible for the company type.
 - TERMINAL VALUE SENSITIVITY: Terminal value often represents 60–80% of DCF
-  enterprise value. The perpetual growth rate is the single highest-impact,
-  most subjective input in the model — it deserves explicit scrutiny and a
-  sensitivity table, not a single unexamined assumption.
+  enterprise value. Only flag if a DCF is explicitly in scope.
 - ACCOUNTING FRAMEWORK: Which country? Which standard (IFRS, US GAAP, local
-  GAAP)? Listed vs private reporting requirements? Some jurisdictions require
-  specific line-item presentation that affects how the model is structured.
+  GAAP)? Only flag if the model will be shared externally or if the jurisdiction
+  is ambiguous and reporting format matters for the use case.
+
+FOR PROFESSIONAL / CLIENT-FACING REQUESTS (not regulated, but consequential):
+Think like a senior colleague who has delivered this type of work to an
+external audience before.
+
+- AUDIENCE AUTHORITY LEVEL: Does the person know enough about who they're
+  presenting to? A board vs a junior team, a new client vs a long-term one,
+  an investor who already knows the space vs one who doesn't — these require
+  fundamentally different outputs. If the audience isn't clear, it's a real gap.
+- VERIFICATION OF CLAIMS: Will any factual claims in this output be taken at
+  face value by the audience? Numbers, market data, competitor claims, case
+  studies — if unverified these can embarrass the person professionally.
+  Flag only if the request suggests data-dependent claims will be made.
+- COMPLETENESS FOR THE OCCASION: Is there an obvious section or data point
+  the audience will expect that the request didn't mention? (E.g. a pitch deck
+  missing a competitive landscape slide, a client report missing a risks
+  section.) Flag only if genuinely consequential for this specific type of work.
 
 FOR LEGAL / REGULATORY REQUESTS:
 - Which jurisdiction (country, state, region)?
@@ -935,21 +981,68 @@ Whichever type you choose, the options you return are suggestions to speed
 the person up, not an exhaustive menu.
 </choosing_input_type>
 
+<question_priority>
+Every question you write falls into one of two tiers. Set the priority field
+accordingly — this signals to the UI which questions are load-bearing.
+
+CRITICAL questions: foundational, identifying, or completeness-blocking. The
+output would be a generic template without the answer. Ask these first, always,
+regardless of how many questions have already been asked.
+Examples: who is this for / who wrote it, what company/product is involved,
+what is the current revenue or core metric, how many slides, what jurisdiction,
+what is the primary goal. If this question not being answered would produce
+a placeholder rather than a specific output, it is critical.
+
+ENRICHMENT questions: preference, style, or polish questions. The output
+would still be specific and usable without the answer — this just makes it
+more tailored. Ask these only after all critical questions are resolved.
+Examples: tone (formal vs casual), length, level of detail, what to avoid,
+visual preferences, secondary goals, edge cases.
+
+The sequence rule: all critical questions before any enrichment questions.
+Never ask an enrichment question when a critical question is still unresolved.
+</question_priority>
+
+<contradiction_handling>
+If the request was flagged with contradictions, resolve them through a question
+early in the interview — before asking about tone or style. Frame it simply:
+present the two conflicting requirements and ask which takes priority.
+Example: "Your request asks for something both very short and extremely detailed
+— which matters more: fitting in one page, or covering everything thoroughly?"
+Mark contradiction-resolution questions as priority "critical".
+</contradiction_handling>
+
+<category_must_ask>
+Certain categories have non-negotiable foundational questions that produce
+placeholder output if not answered. Ask exactly one per turn, in order of
+most-to-least foundational, treating these as critical priority:
+
+FINANCIAL MODEL: If not already stated — (1) what is the primary revenue
+figure or core financial metric right now (current revenue, GMV, AUM, etc.)?
+Without this, every projection is invented. Ask this before listing status,
+before FX, before anything else.
+
+PRESENTATION: If not already stated — (1) how many slides? Without this,
+the structure is a guess. Ask this before asking about density, tone, or content.
+
+WRITING (legal, employment, contracts): If not already stated — (1) which
+country/jurisdiction? Legal writing that ignores jurisdiction is potentially
+wrong. Ask this before anything about tone or length.
+
+Skip any must-ask if the original request already answered it clearly.
+</category_must_ask>
+
 <how_deep_to_go>
-- For "small" tasks: a couple of well-chosen questions is often enough.
-  Don't pad with more just to seem thorough — stopping after 2-3 sharp
-  questions is the right outcome, not a shortcut. But "small" governs how
-  many preference-style questions to ask, not whether a needed-for-
-  completeness identifying-details question (see above) gets asked at all —
-  a small task can still need one of its 2-3 questions to be exactly that.
-- For "big" tasks: go deeper before stopping. These have real stakes, so
-  push past surface preferences into the raw material that would actually
-  separate a generic result from one that fits this specific situation.
-  Resist completing after only 1-2 questions on a big task unless the
-  request was already extremely detailed going in.
-- Regardless of complexity: stop the moment additional questions would
-  stop changing the output. Ending early when truly done is correct;
-  the goal is no wasted questions in either direction, not a quota.
+- For "small" tasks: resolve all critical questions first (1-3 is typical),
+  then ask 1-2 enrichment questions max before stopping. Don't pad — stopping
+  after critical questions are answered is correct, not a shortcut.
+- For "big" tasks: resolve all critical questions (may be 3-5), then push
+  into enrichment territory to capture raw material that separates generic
+  from specific. Resist stopping after only 1-2 total on a big task unless
+  the request was already extremely detailed.
+- Regardless of complexity: stop the moment additional questions would stop
+  changing the output. Never ask an enrichment question if a critical one
+  remains unresolved.
 </how_deep_to_go>
 
 <your_job_each_turn>
@@ -1003,6 +1096,25 @@ produces output they did not need. When in doubt, do less and do it well.
 5. Order stages in the sequence they must happen — foundation before build-out,
    build-out before analysis, analysis before review or presentation polish.
 </task>
+
+<stage_split_test>
+Before splitting into multiple stages, apply this test to every proposed split:
+1. FEED-FORWARD: Does stage N's output get used as input to stage N+1?
+   If the stages are independent (e.g. two sections of the same document that
+   don't reference each other), they must be merged — independence is a reason
+   to collapse, not a reason to split.
+2. MATERIAL DIFFERENCE: Does each stage produce something structurally different
+   from the others? Two narrative sections of the same letter, two chapters of
+   the same report, two slides decks — these are NOT different enough to stage.
+   Stages should differ in their analytical method or output type, not just
+   their topic.
+3. SIZE JUSTIFICATION: Would a skilled professional naturally pause between
+   these two pieces of work to validate the first before beginning the second?
+   If not, they belong in one stage.
+
+If in doubt, collapse to single. A well-executed single prompt beats two
+mediocre stages.
+</stage_split_test>
 
 <stage_balance_rules>
 Every stage should be a coherent, independently valuable unit of work. Avoid:
@@ -1459,7 +1571,15 @@ flagged domain-risk topic that was skipped during the interview (skipped means
 an assumption was taken on faith rather than confirmed). Be specific to this
 request: name the actual concern, not a generic disclaimer. One short sentence
 per note. Phrase as things to verify, not definitive legal or financial
-conclusions. Leave empty when stakes are routine.
+conclusions.
+
+When stakes are "professional": populate "elevated_stakes_notes" with 1-2
+practical things the person should double-check before sending or presenting
+this to their audience — e.g. a key number that should be verified, a claim
+that needs sourcing, or a section the audience will expect. Keep it brief and
+specific; don't pad with generic quality reminders.
+
+Leave empty when stakes are routine.
 </elevated_stakes>
 
 <output_format>
@@ -1737,10 +1857,11 @@ const CLASSIFY_SCHEMA = {
     primary_category:{ type:"string", enum:CATEGORY_ENUM },
     secondary_category:{ type:"string", enum:CATEGORY_ENUM, nullable:true },
     complexity:{ type:"string", enum:["small","big"] },
-    stakes:{ type:"string", enum:["routine","sensitive"] },
+    stakes:{ type:"string", enum:["routine","professional","sensitive"] },
     output_format:{ type:"string", enum:["excel_file","presentation_file","code_file","written_text","image","auto"], nullable:true },
     confidence:{ type:"number" },
-    reasoning:{ type:"string" }
+    reasoning:{ type:"string" },
+    contradictions:{ type:"array", items:{ type:"string" }, nullable:true }
   },
   required:["primary_category","complexity","stakes","output_format","confidence","reasoning"]
 };
@@ -1788,7 +1909,8 @@ const SELECT_QUESTION_SCHEMA = {
           }
         },
         hint:{ type:"string", nullable:true },
-        covers_topic_id:{ type:"string", nullable:true }
+        covers_topic_id:{ type:"string", nullable:true },
+        priority:{ type:"string", enum:["critical","enrichment"], nullable:true }
       },
       required:["id","text","input_type"]
     }
@@ -1842,9 +1964,11 @@ const GENERATE_SCHEMA = {
    ===================================================================== */
 function maxQuestions(){
   const c = state.classification;
-  const base = (c && c.complexity === "big") ? 8 : 5;
+  // High safety ceiling — the model's own "complete" signal is the real stopper.
+  // Critical questions (foundational/identifying) must not be cut short by an
+  // arbitrary number; enrichment questions taper off as the model chooses.
+  const base = (c && c.complexity === "big") ? 20 : 12;
   const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered).length;
-  // Never let the safety cap block coverage of a required topic that's still owed.
   return Math.max(base, state.qaHistory.length + pendingRequired);
 }
 function buildClassifyMsg(){
@@ -1856,7 +1980,8 @@ function buildConsiderationsMsg(){
     'Original request: "' + state.originalRequest + '"',
     "Destination: " + state.destination,
     "Category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
-    "Complexity: " + c.complexity
+    "Complexity: " + c.complexity,
+    "Stakes tier: " + c.stakes
   ].join("\n");
 }
 function buildSelectQuestionMsg(forceTopic){
@@ -1870,7 +1995,9 @@ function buildSelectQuestionMsg(forceTopic){
     "Destination: " + state.destination,
     "Primary category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
     "Complexity: " + c.complexity,
+    "Stakes: " + c.stakes,
     "Questions asked so far this session: " + state.qaHistory.length,
+    ...(c.contradictions && c.contradictions.length ? ["", "Contradictions detected in original request (resolve early):", JSON.stringify(c.contradictions)] : []),
     "",
     "Topics that are often worth probing for this category (inspiration only, not a checklist):",
     JSON.stringify(seeds),
@@ -1915,13 +2042,18 @@ function buildGenerateMsg(){
   ];
   lines.push("Interview answers (JSON):");
   lines.push(JSON.stringify(state.qaHistory.map(q => ({question:q.text, answer:q.answer}))));
-  if (c.stakes === "sensitive" && state.requiredTopics.length){
+  if ((c.stakes === "sensitive" || c.stakes === "professional") && state.requiredTopics.length){
     lines.push("");
     lines.push("Domain-risk topics flagged by the review step, with status (JSON):");
     lines.push(JSON.stringify(state.requiredTopics.map(t => ({
       label:t.label, reason:t.reason,
       status: t.dismissed ? "skipped (marked not applicable by the person)" : (t.covered ? "addressed during the interview" : "skipped (never asked)")
     }))));
+  }
+  if (c.contradictions && c.contradictions.length){
+    lines.push("");
+    lines.push("Contradictions in original request — check interview answers to see how the person resolved them:");
+    lines.push(JSON.stringify(c.contradictions));
   }
   lines.push("");
   if (state.stagePlan){
@@ -1971,7 +2103,7 @@ async function runClassify(){
 function proceedFromClassification(){
   clearTimeout(state._stampTimer);
   const c = state.classification;
-  if (c.stakes === "sensitive" && !state.considerationsDone){
+  if ((c.stakes === "sensitive" || c.stakes === "professional") && !state.considerationsDone){
     runConsiderations();
     return;
   }
@@ -2445,11 +2577,17 @@ function renderLoading(line){
 function renderClassified(){
   const c = state.classification;
   const label = c.primary_category.replace(/_/g," ") + (c.secondary_category ? (" + " + c.secondary_category.replace(/_/g," ")) : "");
-  const stakesNote = c.stakes === "sensitive" ? " &middot; flagged for review" : "";
-  return '' +
-    '<div class="stamp-wrap"><span class="stamp">Filed &middot; ' + esc(label) + ' &middot; ' + esc(c.complexity) + stakesNote + '</span></div>' +
-    '<p class="stamp-sub">' + (c.reasoning ? esc(c.reasoning) : "Got it — figuring out the best next step.") + '</p>' +
-    '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="continue-after-classification">Continue</button></div>';
+  const stakesNote = c.stakes === "sensitive" ? " &middot; flagged for review" : c.stakes === "professional" ? " &middot; professional output" : "";
+  let html = '<div class="stamp-wrap"><span class="stamp">Filed &middot; ' + esc(label) + ' &middot; ' + esc(c.complexity) + stakesNote + '</span></div>' +
+    '<p class="stamp-sub">' + (c.reasoning ? esc(c.reasoning) : "Got it — figuring out the best next step.") + '</p>';
+  if (c.contradictions && c.contradictions.length){
+    html += '<div class="note-panel note-stakes" style="margin-bottom:12px;">' +
+      '<div class="note-panel-title">Conflicting requirements detected</div>' +
+      '<ul class="note-list">' + c.contradictions.map(ct => '<li>' + esc(ct) + '</li>').join("") + '</ul>' +
+    '</div>';
+  }
+  html += '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="continue-after-classification">Continue</button></div>';
+  return html;
 }
 
 function renderGate(){
@@ -2465,9 +2603,14 @@ function renderGate(){
 
 function renderConsiderations(){
   const topics = state.requiredTopics;
+  const isProfessional = state.classification && state.classification.stakes === "professional";
+  const stampLabel = isProfessional ? "Client-facing &middot; " + topics.length + " to cover" : "Flagged &middot; " + topics.length + " to cover";
+  const subText = isProfessional
+    ? "This is going to an external audience, so a quick expert pass flagged a few things that tend to matter for professional outputs. Uncheck anything that genuinely doesn’t apply."
+    : "This touches a regulated or high-stakes area, so a quick expert pass came back with a few things worth nailing down. Anything that genuinely doesn’t apply, mark below — everything left checked will get asked about during the interview.";
   return '' +
-    '<div class="stamp-wrap"><span class="stamp amber">Flagged &middot; ' + topics.length + ' to cover</span></div>' +
-    '<p class="stamp-sub">This touches a regulated or high-stakes area, so a quick expert pass came back with a few things worth nailing down. Anything that genuinely doesn\'t apply, mark below — everything left checked will get asked about during the interview.</p>' +
+    '<div class="stamp-wrap"><span class="stamp amber">' + stampLabel + '</span></div>' +
+    '<p class="stamp-sub">' + subText + '</p>' +
     '<ul class="topic-list">' + topics.map(t =>
       '<li class="topic-row ' + (t.dismissed?"dismissed":"") + '" data-action="toggle-required-topic" data-value="' + esc(t.id) + '">' +
         '<span class="check-box ' + (t.dismissed?"":"on") + '">' + (t.dismissed?"":"✓") + '</span>' +
@@ -2529,9 +2672,15 @@ function renderOptionInput(q){
 function renderInterview(){
   const q = state.currentQuestion;
   const pending = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
-  let html = '' +
-    '<div class="progress-note">' + state.qaHistory.length + ' decision' + (state.qaHistory.length===1?"":"s") + ' logged so far</div>' +
+  const isCritical = q.priority === "critical";
+  const isFirst = state.qaHistory.length === 0;
+  let html = '';
+  if (isFirst){
+    html += '<p class="stamp-sub" style="margin-bottom:4px;">I\'ll ask a few questions to build your prompt — starting with the most important ones.</p>';
+  }
+  html += '<div class="progress-note">' + state.qaHistory.length + ' decision' + (state.qaHistory.length===1?"":"s") + ' logged so far</div>' +
     (pending.length ? '<div class="pending-topics">Still need to cover: ' + pending.map(t => esc(t.label)).join(", ") + '</div>' : '') +
+    (isCritical ? '<div class="question-priority-badge">Key detail</div>' : '') +
     '<p class="question-text">' + esc(q.text) + '</p>' +
     (q.hint ? '<p class="question-hint">' + esc(q.hint) + '</p>' : '') +
     renderOptionInput(q) +
