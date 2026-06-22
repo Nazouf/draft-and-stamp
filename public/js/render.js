@@ -175,14 +175,13 @@ function renderHistory(){
   '</div>' +
   '<input type="search" class="history-search" placeholder="Search prompts…" value="' + esc(historySearch) + '" oninput="onHistorySearch(this.value)">';
 
+  const visibleRuns = historyRuns.filter(r => !hiddenRunIds.has(r.id));
   if (!historyLoading && visibleRuns.length === 0){
     const allHidden = historyRuns.length > 0 && historyRuns.every(r => hiddenRunIds.has(r.id));
     html += '<div class="history-empty">' + (allHidden ? 'All prompts removed from view.' : 'No runs yet — start drafting to see your history here.') + '</div>';
     html += '<div class="btn-row"><button class="btn" data-action="start-over">Start drafting</button></div>';
     return html;
   }
-
-  const visibleRuns = historyRuns.filter(r => !hiddenRunIds.has(r.id));
   html += '<div class="history-list">';
   visibleRuns.forEach(function(run){
     const isExpanded = historyExpanded.has(run.id);
