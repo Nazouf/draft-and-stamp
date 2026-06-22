@@ -1,6 +1,29 @@
 /* =====================================================================
    RENDER — all UI render functions
    ===================================================================== */
+
+/* ── Example pool — 2 picked randomly at page load, stays fixed for the session ── */
+const EXAMPLE_POOL = [
+  { cat: "Writing",      dest: "claude",  text: "Write a cover letter for a senior product manager role at a tech company" },
+  { cat: "Code",         dest: "chatgpt", text: "Build a Python script that reads a CSV, removes duplicate rows, and outputs a clean version" },
+  { cat: "Social",       dest: "chatgpt", text: "Write a LinkedIn post announcing my promotion to senior engineer after two years at my company" },
+  { cat: "Finance",      dest: "chatgpt", text: "Create a 3-year revenue forecast model for a SaaS startup I'm building" },
+  { cat: "Research",     dest: "claude",  text: "Compare AWS, Google Cloud, and Azure for a small startup — cost, ease of use, and what each is best for" },
+  { cat: "Presentation", dest: "chatgpt", text: "Write a 10-slide pitch deck for a consumer app that helps people track their daily habits" },
+  { cat: "Writing",      dest: "claude",  text: "Write a cold email to a potential client introducing my freelance UX design services" },
+  { cat: "Code",         dest: "chatgpt", text: "Build a web scraper in Python that pulls job listings from a public jobs board and saves them to a spreadsheet" },
+  { cat: "Image",        dest: "general", text: "Generate a product photo prompt for a minimal skincare brand — clean, soft lighting, white background" },
+  { cat: "Agent",        dest: "claude",  text: "Write a system prompt for a customer support chatbot for a fashion e-commerce store" },
+  { cat: "Writing",      dest: "claude",  text: "Write a performance review for a junior designer who's been strong technically but needs to improve communication" },
+  { cat: "Code",         dest: "chatgpt", text: "Write a JavaScript function that debounces an input field and fires an API call after the user stops typing" },
+];
+(function shufflePool() {
+  for (let i = EXAMPLE_POOL.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [EXAMPLE_POOL[i], EXAMPLE_POOL[j]] = [EXAMPLE_POOL[j], EXAMPLE_POOL[i]];
+  }
+})();
+const SESSION_EXAMPLES = EXAMPLE_POOL.slice(0, 2);
 function renderReview(){
   const qa = state.qaHistory;
   let html = '<div class="stamp-wrap"><span class="stamp">Review your answers</span></div>' +
@@ -272,10 +295,7 @@ function renderStart(){
         '<button class="update-banner-btn" data-action="refresh-to-update">Refresh to update</button>' +
       '</div>'
     : '';
-  const examples = [
-    { cat: "Writing", dest: "claude",  text: "Write a cover letter for a senior product manager role at a tech company" },
-    { cat: "Code",    dest: "chatgpt", text: "Build a Python script that reads a CSV, removes duplicate rows, and outputs a clean version" },
-  ];
+  const examples = SESSION_EXAMPLES;
 
   return updateBanner +
     '<h1 class="title">Draft &amp; Stamp</h1>' +
