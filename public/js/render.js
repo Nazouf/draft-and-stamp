@@ -347,7 +347,13 @@ function renderOptionInput(q){
       '<button class="custom-toggle" data-action="use-suggested-options">Back to suggested options</button>';
   }
   if (q.input_type === "single_select"){
-    return '<div class="option-stack">' + q.options.map(o =>
+    const opts = q.options || [];
+    if (!opts.length) {
+      // Model picked single_select but sent no options — fall back to free text
+      return '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
+        '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Continue</button></div>';
+    }
+    return '<div class="option-stack">' + opts.map(o =>
       '<button class="option-btn" data-action="select-option" data-value="' + esc(o.label) + '">' +
         '<span class="option-label">' + esc(o.label) + '</span>' +
         (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
@@ -355,7 +361,12 @@ function renderOptionInput(q){
     ).join("") + '</div>' + renderCustomToggle(q);
   }
   if (q.input_type === "multi_select"){
-    return '<div class="option-stack">' + q.options.map(o => {
+    const opts = q.options || [];
+    if (!opts.length) {
+      return '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
+        '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Continue</button></div>';
+    }
+    return '<div class="option-stack">' + opts.map(o => {
       const on = state.multiSelections.includes(o.label);
       return '<div class="check-row" data-action="toggle-multi" data-value="' + esc(o.label) + '">' +
         '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
