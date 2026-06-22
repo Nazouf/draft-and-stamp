@@ -546,15 +546,18 @@ function renderErrorBanner(){
   if (!state.error) return '';
   const msg = state.error.message || "";
   const isNetwork  = msg === "network_failure";
-  const isCapacity = !isNetwork && (msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("unavailable"));
+  const isTimeout  = msg === "timeout_failure";
+  const isCapacity = !isNetwork && !isTimeout && (msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("high demand") || msg.includes("overloaded"));
   const heading = isNetwork  ? "Connection problem"
+                : isTimeout  ? "Request timed out"
                 : isCapacity ? "Service temporarily at capacity"
                 :              "Something went wrong";
-  const body = isNetwork  ? "Looks like a network issue — check your Wi-Fi or mobile data and try again. Your progress is saved."
-             : isCapacity ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
-             : msg;
+  const errBody = isNetwork  ? "Looks like a network issue — check your Wi-Fi or mobile data and try again. Your progress is saved."
+               : isTimeout  ? "The AI service took too long to respond — this usually fixes itself. Hit Try again; your progress is saved."
+               : isCapacity ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
+               : msg;
   const retryLabel = isCapacity ? "Retry" : "Try again";
-  return '<div class="error-banner"><strong>' + esc(heading) + '</strong><p style="margin:6px 0 12px;">' + esc(body) + '</p>' +
+  return '<div class="error-banner"><strong>' + esc(heading) + '</strong><p style="margin:6px 0 12px;">' + esc(errBody) + '</p>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="retry">' + retryLabel + '</button><button class="btn" data-action="start-over">Start over</button></div></div>';
 }
 

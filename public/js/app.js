@@ -306,7 +306,8 @@ function logUsage(step, model, usage){
    API — calls this app's own server, which holds the real key. The
    browser never sees it and never talks to Google directly.
    ===================================================================== */
-async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model){
+async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, _retry){
+  if (_retry === undefined) _retry = 0;
   const genConfig = {
     responseMimeType: "application/json",
     responseSchema: responseSchema,
@@ -320,11 +321,16 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
     const { data: { session } } = await sbClient.auth.getSession();
     if (session?.access_token) headers["Authorization"] = "Bearer " + session.access_token;
   }
+  // Shorter timeout for quick steps; longer for generate which can legitimately take 60-90s
+  const timeoutMs = (maxOutputTokens || 1000) > 2000 ? 90000 : 25000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(function(){ controller.abort(); }, timeoutMs);
   let response;
   try {
     response = await fetch("/api/gemini", {
       method:"POST",
       headers,
+      signal: controller.signal,
       body: JSON.stringify({
         model: model || STRONG_MODEL,
         systemInstruction: { parts:[{ text: systemPrompt }] },
@@ -333,11 +339,22 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
       })
     });
   } catch(e) {
+    clearTimeout(timeoutId);
+    if (e.name === "AbortError") throw new Error("timeout_failure");
     throw new Error("network_failure");
   }
+  clearTimeout(timeoutId);
   const data = await response.json();
   if (!response.ok || data.error){
-    throw new Error((data.error && data.error.message) || ("Request failed (" + response.status + ")"));
+    const errMsg = (data.error && data.error.message) || ("Request failed (" + response.status + ")");
+    // Auto-retry up to 2x for capacity/overload errors before surfacing to the user
+    const isCapacity = response.status === 503 ||
+      errMsg.includes("high demand") || errMsg.includes("overloaded") || errMsg.includes("temporarily unavailable");
+    if (isCapacity && _retry < 2){
+      await new Promise(function(r){ setTimeout(r, 2000 * (_retry + 1)); });
+      return callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, _retry + 1);
+    }
+    throw new Error(errMsg);
   }
   const candidate = (data.candidates || [])[0];
   const text = candidate && candidate.content && candidate.content.parts
