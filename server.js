@@ -15,13 +15,13 @@ app.use(express.static(path.join(__dirname, "public")));
 // 50 requests per 10 minutes = ~5 full pipeline sessions.
 const geminiLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 50,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests. Please wait a few minutes and try again." }
 });
 
-const APP_VERSION = "v1.21.7";
+const APP_VERSION = "v1.21.8";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -112,13 +112,22 @@ async function callWithRotation(model, body) {
     );
 
     const data = await upstream.json();
+    const errMsg = (data.error && data.error.message) || "";
     const isQuotaError = upstream.status === 429 ||
-      (data.error && (data.error.code === 429 || (data.error.message || "").includes("quota")));
+      (data.error && (data.error.code === 429 || errMsg.includes("quota")));
+    const isCapacityError = upstream.status === 503 ||
+      errMsg.includes("high demand") || errMsg.includes("overloaded") || errMsg.includes("temporarily unavailable");
 
     if (isQuotaError) {
       stat.error_count_429 = (stat.error_count_429 || 0) + 1;
       stat.last_429_at = new Date().toISOString();
       persistKeyStat(stat);
+      keyIndex = (idx + 1) % API_KEYS.length;
+      continue;
+    }
+
+    if (isCapacityError) {
+      // Rotate to next key without logging as 429 — capacity is model-wide, try another key
       keyIndex = (idx + 1) % API_KEYS.length;
       continue;
     }
@@ -132,8 +141,8 @@ async function callWithRotation(model, body) {
   }
 
   return {
-    status: 429,
-    data: { error: { message: `All API keys are unavailable (disabled or at their daily limit).` } }
+    status: 503,
+    data: { error: { message: `All API keys are currently unavailable — the service may be at capacity. Please try again in a moment.` } }
   };
 }
 

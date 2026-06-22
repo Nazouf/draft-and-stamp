@@ -306,8 +306,7 @@ function logUsage(step, model, usage){
    API — calls this app's own server, which holds the real key. The
    browser never sees it and never talks to Google directly.
    ===================================================================== */
-async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, _retry){
-  if (_retry === undefined) _retry = 0;
+async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model){
   const genConfig = {
     responseMimeType: "application/json",
     responseSchema: responseSchema,
@@ -346,15 +345,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   clearTimeout(timeoutId);
   const data = await response.json();
   if (!response.ok || data.error){
-    const errMsg = (data.error && data.error.message) || ("Request failed (" + response.status + ")");
-    // Auto-retry up to 2x for capacity/overload errors before surfacing to the user
-    const isCapacity = response.status === 503 ||
-      errMsg.includes("high demand") || errMsg.includes("overloaded") || errMsg.includes("temporarily unavailable");
-    if (isCapacity && _retry < 2){
-      await new Promise(function(r){ setTimeout(r, 2000 * (_retry + 1)); });
-      return callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, _retry + 1);
-    }
-    throw new Error(errMsg);
+    throw new Error((data.error && data.error.message) || ("Request failed (" + response.status + ")"));
   }
   const candidate = (data.candidates || [])[0];
   const text = candidate && candidate.content && candidate.content.parts
