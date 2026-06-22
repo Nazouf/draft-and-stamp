@@ -601,7 +601,7 @@ function renderResult(){
         '</div>') +
     '<button class="ledger-toggle" data-action="toggle-ledger">' + (state.ledgerOpen?"Hide":"Show") + ' what happened behind the scenes</button>' +
     (state.ledgerOpen ? renderLedger() : '') +
-    '<div class="btn-row">' +
+    '<div class="btn-row result-btn-row">' +
       '<button class="btn" data-action="regenerate">Regenerate</button>' +
       (state.qaHistory.length ? '<button class="btn" data-action="edit-answers">Edit answers</button>' : '') +
       '<button class="btn" data-action="start-over">Start a new prompt</button>' +

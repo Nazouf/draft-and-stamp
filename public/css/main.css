@@ -616,9 +616,28 @@
     .review-row-head{flex-wrap:wrap;gap:6px;}
     .review-edit-btn{flex-shrink:0;}
 
-    /* options: make tap targets bigger */
-    .option-btn{padding:14px;}
+    /* options: tighter on mobile */
+    .option-btn{padding:10px 12px;}
     .example-cards{grid-template-columns:1fr;}
+
+    /* ai-decide button: solid green, prominent */
+    .ai-decide-btn{
+      background:var(--green);color:#fff;
+      border-color:var(--green);border-style:solid;opacity:1;
+    }
+    .ai-decide-btn:hover{background:#2e5940;border-color:#2e5940;}
+
+    /* rating pills: all 10 in one row */
+    .fb-pills{flex-wrap:nowrap;}
+    .fb-pill{width:28px;height:28px;font-size:0.74rem;border-width:1px;}
+
+    /* copy prompt: full width */
+    .prompt-card-head{flex-direction:column;gap:8px;align-items:stretch;}
+    .prompt-copy-btn{width:100%;text-align:center;align-self:stretch;}
+
+    /* result bottom actions: side-by-side row */
+    .result-btn-row{flex-direction:row;flex-wrap:wrap;}
+    .result-btn-row .btn{flex:1;min-width:0;font-size:0.82rem;padding:9px 8px;text-align:center;}
 
     /* how-it-works: hide full row, show compact box */
     .how-it-works{display:none;}
