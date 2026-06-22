@@ -777,11 +777,11 @@ function confirmGenerate(){
 async function runStagePlanner(){
   state.screen = "staging_loading"; state.error = null; renderAll();
   try{
-    const { text, usage } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, STRONG_MODEL);
+    const { text, usage } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, FAST_MODEL);
     const rawPlan = parseJSON(text);
     if (rawPlan && rawPlan.stages) rawPlan.stages = rawPlan.stages.slice(0, 4);
     state.stagePlan = rawPlan;
-    logUsage("plan_stages", STRONG_MODEL, usage);
+    logUsage("plan_stages", FAST_MODEL, usage);
     state.screen = "staged";
     renderAll();
   } catch(e){

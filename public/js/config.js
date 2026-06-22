@@ -138,9 +138,9 @@ const STAGE_HINTS = {
   other: "No fixed shape for this category — decide purely from what's genuinely separable in this specific request."
 };
 
-const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
-const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.25.3";
+const FAST_MODEL   = "gemini-3.1-flash-lite"; // classify, considerations, questions, staging (500 RPD free tier)
+const STRONG_MODEL = "gemini-2.5-flash";      // generate only (20 RPD, separate quota from FAST_MODEL)
+const APP_VERSION  = "v1.25.4";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
