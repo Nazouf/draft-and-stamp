@@ -7,6 +7,7 @@
 let sbClient = null;
 let currentUser = null;
 let isAdmin = false;
+let topbarMenuOpen = false;
 let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
 let clientQuickTimeoutMs   = 25000;
@@ -1080,11 +1081,20 @@ document.getElementById("app").addEventListener("click", function(e){
 document.getElementById("topbar-right").addEventListener("click", function(e){
   const el = e.target.closest("[data-action]");
   if (!el) return;
-  if (el.dataset.action === "start-over") startOver();
-  else if (el.dataset.action === "open-login") openLogin();
-  else if (el.dataset.action === "sign-out") signOut();
-  else if (el.dataset.action === "show-history") loadHistory(0);
-  else if (el.dataset.action === "toggle-dark") toggleDarkMode();
+  const action = el.dataset.action;
+  if (action === "topbar-more") { topbarMenuOpen = !topbarMenuOpen; renderTopbar(); return; }
+  topbarMenuOpen = false;
+  if (action === "start-over") startOver();
+  else if (action === "open-login") openLogin();
+  else if (action === "sign-out") signOut();
+  else if (action === "show-history") loadHistory(0);
+  else if (action === "toggle-dark") toggleDarkMode();
+});
+
+document.addEventListener("click", function(e){
+  if (topbarMenuOpen && !document.getElementById("topbar-right").contains(e.target)) {
+    topbarMenuOpen = false; renderTopbar();
+  }
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){

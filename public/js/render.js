@@ -263,17 +263,26 @@ function renderHistory(){
 function renderTopbar(){
   let html = '';
   if (currentUser){
-    if (unrestrictedMode) html += '<span class="chip">Beta &middot; unlimited</span>';
-    html += '<span class="chip">' + esc(currentUser.email) + '</span>';
-    html += '<span class="topbar-sep"></span>';
+    if (unrestrictedMode) html += '<span class="chip topbar-hide-mobile">Beta &middot; unlimited</span>';
+    html += '<span class="chip topbar-hide-mobile">' + esc(currentUser.email) + '</span>';
+    html += '<span class="topbar-sep topbar-hide-mobile"></span>';
     html += '<button class="topbar-btn" data-action="show-history">My prompts</button>';
     if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:5px 13px;font-size:0.8rem;text-decoration:none;">Admin</a>';
-    html += '<span class="topbar-sep"></span>';
-    html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
-    html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
-    html += '<span class="topbar-sep"></span>';
+    html += '<span class="topbar-sep topbar-hide-mobile"></span>';
+    html += '<button class="topbar-btn topbar-hide-mobile" data-action="sign-out">Sign out</button>';
+    html += '<button class="topbar-btn topbar-hide-mobile" data-action="start-over">Start over</button>';
+    html += '<span class="topbar-sep topbar-hide-mobile"></span>';
+    html += '<button class="topbar-btn topbar-more-btn" data-action="topbar-more" aria-label="More options">&#8942;</button>';
+    if (topbarMenuOpen) {
+      html += '<div class="topbar-more-menu">' +
+        '<div class="topbar-menu-email">' + esc(currentUser.email) + '</div>' +
+        '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
+        '<button class="topbar-menu-item" data-action="start-over">↩ Start over</button>' +
+        '<button class="topbar-menu-item topbar-menu-signout" data-action="sign-out">Sign out</button>' +
+      '</div>';
+    }
   }
-  html += '<button class="topbar-btn" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
+  html += '<button class="topbar-btn topbar-hide-mobile" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
   const el = document.getElementById("topbar-right");
   if (el.innerHTML !== html) el.innerHTML = html;
 }
