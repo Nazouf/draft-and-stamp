@@ -613,10 +613,22 @@ async function loadFeedback() {
 async function loadKeys() {
   const el = document.getElementById("keys-content");
   el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
-  const res = await adminFetch("/api/admin/keys");
-  const { keys } = await res.json();
+  const [keysRes, rlRes] = await Promise.all([
+    adminFetch("/api/admin/keys"),
+    adminFetch("/api/admin/rate-limit")
+  ]);
+  const { keys } = await keysRes.json();
+  const rl = await rlRes.json();
 
-  let html = `<table class="data-table"><thead><tr>
+  const rlHtml = `<div style="display:flex;align-items:center;gap:14px;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+    <span style="font-size:0.85rem;color:var(--text-dim);">IP Rate Limit</span>
+    <span style="font-size:0.85rem;color:#ccc;">${rl.max} req / ${rl.window_minutes} min per IP</span>
+    <span style="flex:1;"></span>
+    <span id="rl-status" style="font-size:0.82rem;color:${rl.enabled ? "#4caf50" : "#e74c3c"};">${rl.enabled ? "● Enabled" : "● Disabled"}</span>
+    <button class="expand-btn" id="rl-toggle-btn" onclick="toggleRateLimit(${!rl.enabled})">${rl.enabled ? "Disable" : "Enable"}</button>
+  </div>`;
+
+  let html = rlHtml + `<table class="data-table"><thead><tr>
     <th>#</th><th>Key</th><th>Status</th><th>Today</th><th>Daily Limit</th><th>Total Calls</th><th>429 Errors</th><th>Last Used</th><th>Last 429</th><th>Actions</th>
   </tr></thead><tbody>`;
 
@@ -657,6 +669,12 @@ async function loadKeys() {
   html += `</tbody></table>
     <p style="color:var(--text-dim);font-size:0.82rem;margin-top:12px;">Daily limit resets at midnight. Set to 0 for unlimited. Disabled keys are skipped entirely.</p>`;
   el.innerHTML = html;
+}
+
+async function toggleRateLimit(enabled) {
+  document.getElementById("rl-toggle-btn").disabled = true;
+  await adminFetch("/api/admin/rate-limit", { method: "POST", body: JSON.stringify({ enabled }) });
+  loadKeys();
 }
 
 async function toggleKey(idx, enabled) {

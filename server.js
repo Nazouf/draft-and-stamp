@@ -13,15 +13,18 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Per-IP rate limit on the Gemini proxy — prevents abuse of paid API keys.
 // 50 requests per 10 minutes = ~5 full pipeline sessions.
+let rateLimitEnabled = true; // toggleable from admin panel without restart
+
 const geminiLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Please wait a few minutes and try again." }
+  message: { error: "Too many requests. Please wait a few minutes and try again." },
+  skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.21.8";
+const APP_VERSION = "v1.21.9";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -68,6 +71,10 @@ async function loadKeyStats() {
   if (!supabaseAdmin) return;
   const { data } = await supabaseAdmin.from("gemini_keys").select("*").order("key_index");
   if (data && data.length) keyStats = data;
+  // Load rate limit toggle
+  const { data: setting } = await supabaseAdmin.from("settings")
+    .select("value").eq("key", "rate_limit_enabled").single();
+  if (setting) rateLimitEnabled = setting.value !== "false";
 }
 
 function todayDate() { return new Date().toISOString().slice(0, 10); }
@@ -536,6 +543,24 @@ app.post("/api/admin/keys/:index", requireAdmin, async (req, res) => {
   if (daily_limit !== undefined) stat.daily_limit = Math.max(0, parseInt(daily_limit) || 0);
   persistKeyStat(stat);
   res.json({ ok: true, stat });
+});
+
+// ─── Admin: rate limit toggle ─────────────────────────────────────────────────
+app.get("/api/admin/rate-limit", requireAdmin, (req, res) => {
+  res.json({ enabled: rateLimitEnabled, max: 200, window_minutes: 10 });
+});
+
+app.post("/api/admin/rate-limit", requireAdmin, async (req, res) => {
+  if (req.body.enabled !== undefined) {
+    rateLimitEnabled = Boolean(req.body.enabled);
+    if (supabaseAdmin) {
+      await supabaseAdmin.from("settings").upsert(
+        { key: "rate_limit_enabled", value: rateLimitEnabled ? "true" : "false" },
+        { onConflict: "key" }
+      );
+    }
+  }
+  res.json({ ok: true, enabled: rateLimitEnabled });
 });
 
 // ─── Admin: export runs as CSV ────────────────────────────────────────────────
