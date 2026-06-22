@@ -407,7 +407,7 @@ function renderInterview(){
     html += '<p class="stamp-sub" style="margin-bottom:4px;">I\'ll ask a few questions to build your prompt — starting with the most important ones.</p>';
   }
   const isBig = state.classification && state.classification.complexity === "big";
-  const softCap = isBig ? 6 : 4;
+  const softCap = isBig ? bigCritCap + 1 : smallCritCap + 1;
   const isAlmostDone = state.qaHistory.length >= softCap - 1;
   const progressLabel = isAlmostDone
     ? '<div class="progress-note" style="color:var(--green);">Almost done — wrapping up</div>'

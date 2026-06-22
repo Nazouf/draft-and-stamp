@@ -11,6 +11,10 @@ let appInitialized = false; // true once initApp() finishes (hides loading flash
 let unrestrictedMode = true;
 let clientQuickTimeoutMs   = 25000;
 let clientGenerateTimeoutMs = 90000;
+let smallCritCap   = 3;
+let bigCritCap     = 5;
+let smallEnrichCap = 1;
+let bigEnrichCap   = 2;
 let currentRunId = null;
 let authMode = "signin"; // "signin" | "signup"
 let authView = "choice"; // "choice" | "form" | "forgot"
@@ -33,6 +37,10 @@ async function initApp(){
   unrestrictedMode = cfg.unrestrictedMode !== false;
   if (cfg.clientQuickTimeout)    clientQuickTimeoutMs    = cfg.clientQuickTimeout;
   if (cfg.clientGenerateTimeout) clientGenerateTimeoutMs = cfg.clientGenerateTimeout;
+  if (cfg.smallCritCap   != null) smallCritCap   = cfg.smallCritCap;
+  if (cfg.bigCritCap     != null) bigCritCap     = cfg.bigCritCap;
+  if (cfg.smallEnrichCap != null) smallEnrichCap = cfg.smallEnrichCap;
+  if (cfg.bigEnrichCap   != null) bigEnrichCap   = cfg.bigEnrichCap;
 
   if (cfg.supabaseUrl && cfg.supabaseAnonKey){
     sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
@@ -674,6 +682,14 @@ function toggleRequiredTopic(id){
   renderAll();
 }
 
+function getSelectQuestionSystem() {
+  return SELECT_QUESTION_SYSTEM
+    .replace(/\{\{SMALL_CRIT_CAP\}\}/g,   String(smallCritCap))
+    .replace(/\{\{BIG_CRIT_CAP\}\}/g,     String(bigCritCap))
+    .replace(/\{\{SMALL_ENRICH_CAP\}\}/g, String(smallEnrichCap))
+    .replace(/\{\{BIG_ENRICH_CAP\}\}/g,   String(bigEnrichCap));
+}
+
 async function runSelectQuestion(forceTopic){
   if (!forceTopic && state.qaHistory.length >= maxQuestions()){
     proceedAfterInterview();
@@ -689,7 +705,7 @@ async function runSelectQuestion(forceTopic){
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
     const sqModel = FAST_MODEL;
-    const { text, usage } = await callGemini(SELECT_QUESTION_SYSTEM, buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, sqModel);
+    const { text, usage } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, sqModel);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);
     const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);

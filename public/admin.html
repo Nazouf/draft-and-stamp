@@ -803,14 +803,14 @@ async function loadSettings() {
   if (!res.ok) { el.innerHTML = '<div style="color:#E07070;padding:20px 0;">Failed to load settings.</div>'; return; }
   const s = await res.json();
 
-  const field = (key, label, desc, value, unit) => `
+  const field = (key, label, desc, value, unit, min=1) => `
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:16px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
         <div style="font-size:0.9rem;color:var(--text);margin-bottom:2px;">${label}</div>
         <div style="font-size:0.8rem;color:var(--text-dim);">${desc}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <input type="number" id="setting-${key}" value="${value}" min="1"
+        <input type="number" id="setting-${key}" value="${value}" min="${min}"
           style="width:80px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:0.9rem;font-family:'IBM Plex Mono',monospace;text-align:right;">
         <span style="color:var(--text-dim);font-size:0.82rem;min-width:32px;">${unit}</span>
         <button class="expand-btn" onclick="saveAppSetting('${key}')" id="save-btn-${key}">Save</button>
@@ -825,6 +825,14 @@ async function loadSettings() {
       ${field("client_generate_timeout", "Client — generate timeout",         "How long the browser waits for the generate call (the strong model, thinking enabled).",              s.client_generate_timeout, "sec")}
       ${field("server_quick_timeout",    "Server key — quick timeout",        "How long the server waits per Gemini key for classify / question / stage calls before rotating.",     s.server_quick_timeout,    "sec")}
       ${field("server_generate_timeout", "Server key — generate timeout",     "How long the server waits per Gemini key for the generate call before rotating.",                     s.server_generate_timeout, "sec")}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Question Caps</div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">These values are injected into the AI's system prompt at runtime — changes take effect on the next interview without a server restart. "Cap" = the number at which budget pressure kicks in, not a hard cutoff; critical questions can still exceed it.</div>
+      ${field("small_crit_cap",   "Small task — question cap",      "Budget pressure kicks in once this many questions have been asked on small/routine tasks (emails, messages, short notes). Default: 3.",         s.small_crit_cap,   "q")}
+      ${field("big_crit_cap",     "Big task — question cap",        "Budget pressure kicks in once this many questions have been asked on big/professional tasks (financial models, presentations). Default: 5.",   s.big_crit_cap,     "q")}
+      ${field("small_enrich_cap", "Small task — enrichment cap",    "Max style/tone/preference questions after all critical questions are done, for small tasks. Set to 0 to skip enrichment entirely. Default: 1.", s.small_enrich_cap, "q", 0)}
+      ${field("big_enrich_cap",   "Big task — enrichment cap",      "Max style/tone/preference questions after all critical questions are done, for big tasks. Default: 2.",                                        s.big_enrich_cap,   "q", 0)}
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;">
       <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Limits</div>

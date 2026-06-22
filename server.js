@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.23.0";
+const APP_VERSION = "v1.25.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 
@@ -35,6 +35,12 @@ let serverQuickTimeoutMs   = 25000;
 let serverGenerateTimeoutMs = 100000;
 let clientQuickTimeoutMs   = 25000;
 let clientGenerateTimeoutMs = 90000;
+
+// Question cap settings — injected into SELECT_QUESTION_SYSTEM at runtime.
+let smallCritCap   = 3;  // hard budget pressure kicks in above this for small tasks
+let bigCritCap     = 5;  // hard budget pressure kicks in above this for big tasks
+let smallEnrichCap = 1;  // max enrichment questions for small tasks
+let bigEnrichCap   = 2;  // max enrichment questions for big tasks
 
 // Supabase admin client — uses service role key, never exposed to the browser.
 const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -81,6 +87,10 @@ function applySettingRow(key, value) {
   if (key === "server_generate_timeout") serverGenerateTimeoutMs  = Math.max(10,  parseInt(value) || 100) * 1000;
   if (key === "client_quick_timeout")    clientQuickTimeoutMs     = Math.max(5,   parseInt(value) || 25)  * 1000;
   if (key === "client_generate_timeout") clientGenerateTimeoutMs  = Math.max(10,  parseInt(value) || 90)  * 1000;
+  if (key === "small_crit_cap")          smallCritCap             = Math.max(1, parseInt(value) || 3);
+  if (key === "big_crit_cap")            bigCritCap               = Math.max(1, parseInt(value) || 5);
+  if (key === "small_enrich_cap")        smallEnrichCap           = Math.max(0, parseInt(value) || 1);
+  if (key === "big_enrich_cap")          bigEnrichCap             = Math.max(0, parseInt(value) || 2);
 }
 
 async function loadKeyStats() {
@@ -253,7 +263,8 @@ app.get("/api/config", async (req, res) => {
     unrestrictedMode: unrestricted,
     clientQuickTimeout: clientQuickTimeoutMs,
     clientGenerateTimeout: clientGenerateTimeoutMs,
-    monthlyRunLimit
+    monthlyRunLimit,
+    smallCritCap, bigCritCap, smallEnrichCap, bigEnrichCap
   });
 });
 
@@ -556,7 +567,11 @@ app.get("/api/admin/app-settings", requireAdmin, (req, res) => {
     client_generate_timeout: clientGenerateTimeoutMs / 1000,
     server_quick_timeout:    serverQuickTimeoutMs   / 1000,
     server_generate_timeout: serverGenerateTimeoutMs / 1000,
-    monthly_run_limit:       monthlyRunLimit
+    monthly_run_limit:       monthlyRunLimit,
+    small_crit_cap:          smallCritCap,
+    big_crit_cap:            bigCritCap,
+    small_enrich_cap:        smallEnrichCap,
+    big_enrich_cap:          bigEnrichCap
   });
 });
 

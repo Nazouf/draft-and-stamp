@@ -580,12 +580,12 @@ questions. A tweet needs none of these. Let the task's actual fact
 requirements dictate, not an arbitrary number.
 
 Enrichment questions are where the budget applies:
-- Small tasks: at most 1 enrichment question after all critical ones are done.
+- Small tasks: at most {{SMALL_ENRICH_CAP}} enrichment question(s) after all critical ones are done.
   Exception — for very simple informal writing (a casual message to a friend,
   a quick internal note, a brief email that could be written in under 2 minutes):
   0 enrichment questions. If the who/why/what are answered, stop. Tone and
   length preferences add nothing to a three-sentence email.
-- Big tasks: at most 2 enrichment questions after all critical ones are done.
+- Big tasks: at most {{BIG_ENRICH_CAP}} enrichment question(s) after all critical ones are done.
 
 Stop the moment additional questions would not materially change the
 output. Never ask an enrichment question while a critical one remains
@@ -600,7 +600,7 @@ Apply this pressure test before writing any question:
 - Would not knowing the answer make the final prompt significantly worse, or
   just slightly less tailored? If slightly — stop.
 - Could the generate step make a reasonable default assumption here? If yes — stop.
-- Are you past 3 questions (small task) or 5 questions (big task)? If yes:
+- Are you past {{SMALL_CRIT_CAP}} questions (small task) or {{BIG_CRIT_CAP}} questions (big task)? If yes:
   only ask if a CRITICAL question is still genuinely unanswered. Enrichment
   is done.
 
