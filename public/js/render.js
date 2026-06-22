@@ -276,7 +276,6 @@ function renderStart(){
     '<h1 class="title">Draft &amp; Stamp</h1>' +
     '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 18px;">your personal prompt engineer</p>' +
     '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
-    '<p class="meta-caption">Built straight from this project\'s own pipeline spec: classify &rarr; ask &rarr; stage &rarr; write.</p>' +
     '<label class="field-label" for="request-input">What do you want to create?</label>' +
     '<textarea id="request-input" placeholder="e.g. a tweet about our new coffee blend, or a financial model for a seed round">' + esc(state.originalRequest) + '</textarea>' +
     (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
