@@ -616,8 +616,18 @@
     /* options: make tap targets bigger */
     .option-btn{padding:14px;}
     .example-cards{grid-template-columns:1fr;}
-    .how-it-works{gap:7px;}
-    .how-label{font-size:0.8rem;}
+
+    /* how-it-works: stack vertically on mobile */
+    .how-it-works{flex-direction:column;align-items:flex-start;gap:4px;margin:14px 0 18px;}
+    .how-arrow{transform:rotate(90deg);margin-left:3px;font-size:0.8rem;}
+    .how-label{font-size:0.82rem;}
+
+    /* tighten subtitle and title on mobile */
+    .title{font-size:1.8rem;margin-bottom:4px;}
+    .subtitle{font-size:0.88rem;margin-bottom:4px;}
+
+    /* tighten examples section */
+    .examples-section{margin:14px 0 4px;}
 
     /* topbar user section */
     .topbar-btn{padding:5px 10px;font-size:0.76rem;}
