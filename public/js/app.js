@@ -6,7 +6,6 @@
    ===================================================================== */
 let sbClient = null;
 let currentUser = null;
-let tourStep = null; // null = hidden, 0–3 = current slide
 let isAdmin = false;
 let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
@@ -59,10 +58,6 @@ async function initApp(){
       currentUser = session?.user || null;
       authLoading = false;
       isAdmin = await fetchIsAdmin(currentUser);
-      if (event === "SIGNED_IN" && currentUser) {
-        closeLogin();
-        if (!localStorage.getItem("ds_tour_seen")) tourStep = 0;
-      }
       renderAll();
     });
   }
@@ -931,18 +926,6 @@ document.getElementById("app").addEventListener("click", function(e){
   const action = el.dataset.action;
   switch(action){
     case "set-destination": state.destination = el.dataset.value; renderAll(); break;
-    case "tour-next":
-      tourStep = (tourStep || 0) + 1;
-      if (tourStep >= 4) { tourStep = null; localStorage.setItem("ds_tour_seen","1"); }
-      renderAll(); break;
-    case "tour-prev":
-      tourStep = Math.max(0, (tourStep || 0) - 1);
-      renderAll(); break;
-    case "tour-close":
-      tourStep = null; localStorage.setItem("ds_tour_seen","1");
-      renderAll(); break;
-    case "tour-replay":
-      tourStep = 0; renderAll(); break;
     case "use-example":
       state.originalRequest = el.dataset.value || "";
       if (el.dataset.dest) state.destination = el.dataset.dest;
@@ -1102,7 +1085,6 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   else if (el.dataset.action === "sign-out") signOut();
   else if (el.dataset.action === "show-history") loadHistory(0);
   else if (el.dataset.action === "toggle-dark") toggleDarkMode();
-  else if (el.dataset.action === "tour-replay") { tourStep = 0; renderAll(); }
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){

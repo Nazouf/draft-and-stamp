@@ -248,7 +248,6 @@ function renderTopbar(){
     html += '<span class="topbar-sep"></span>';
     html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
     html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
-    html += '<button class="topbar-btn" data-action="tour-replay" title="Replay getting started tour">Tour</button>';
     html += '<span class="topbar-sep"></span>';
   }
   html += '<button class="topbar-btn" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
@@ -586,64 +585,6 @@ function renderLedger(){
     '</tbody></table>';
 }
 
-/* =====================================================================
-   ONBOARDING TOUR
-   ===================================================================== */
-function renderTour(step) {
-  const slides = [
-    {
-      visual: '<div style="text-align:center;padding:10px 0 14px;"><span style="font-size:2.2rem;color:var(--red);">✦</span></div>',
-      title: "Welcome to Draft & Stamp",
-      body:  "Most AI prompts get mediocre results because they're too vague. This app runs a short interview — the same questions a professional would ask — then writes the precise prompt your AI actually needs.",
-    },
-    {
-      visual: '<div style="display:flex;align-items:center;gap:9px;justify-content:center;padding:10px 0 14px;">' +
-        '<span style="width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:0.7rem;font-weight:700;font-family:\'IBM Plex Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</span>' +
-        '<span style="color:var(--muted);">›</span>' +
-        '<span style="width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:0.7rem;font-weight:700;font-family:\'IBM Plex Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</span>' +
-        '<span style="color:var(--muted);">›</span>' +
-        '<span style="width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:0.7rem;font-weight:700;font-family:\'IBM Plex Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</span>' +
-      '</div>',
-      title: "Start with an idea — any idea",
-      body:  "Type a rough description of what you want to make, or pick one of the example cards on the home screen. Don't worry about being precise yet — that's what the next step is for.",
-    },
-    {
-      visual: '<div style="text-align:center;padding:10px 0 14px;"><span style="display:inline-block;font-size:0.72rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#1a5276;background:#d6eaf8;border:1px solid #aed6f1;border-radius:4px;padding:5px 12px;">Key Detail</span></div>',
-      title: "We ask the right questions",
-      body:  "Based on what you describe, we run a short interview — usually 5 to 8 focused questions. Each answer shapes the final prompt. If you're unsure about something, you can skip it or tap ❖ Let AI decide and we'll make the best call.",
-    },
-    {
-      visual: '<div style="text-align:center;padding:10px 0 14px;"><span style="display:inline-block;border:3px double var(--green);color:var(--green);font-family:\'IBM Plex Mono\',monospace;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;font-size:0.78rem;padding:8px 18px;border-radius:2px;transform:rotate(-2deg);display:inline-block;">Approved</span></div>',
-      title: "Copy it. Paste it. Done.",
-      body:  "Once the interview's done, we write your prompt — tailored for whichever AI tool you chose. Copy it and paste it in to get real output. Every run is saved to your account automatically.",
-    },
-  ];
-
-  const s     = slides[Math.min(step, slides.length - 1)];
-  const total = slides.length;
-  const isLast = step === total - 1;
-
-  const dots = Array.from({ length: total }, (_, i) =>
-    '<span class="tour-dot' + (i === step ? " active" : "") + '"></span>'
-  ).join("");
-
-  return (
-    '<div class="tour-card">' +
-      '<button class="tour-close" data-action="tour-close" aria-label="Close tour">&#x2715;</button>' +
-      s.visual +
-      '<div class="tour-title">' + esc(s.title) + '</div>' +
-      '<div class="tour-body">' + esc(s.body) + '</div>' +
-      '<div class="tour-footer">' +
-        '<div class="tour-dots">' + dots + '</div>' +
-        '<div class="tour-btns">' +
-          (step > 0 ? '<button class="tour-back" data-action="tour-prev">← Back</button>' : '') +
-          '<button class="btn btn-primary btn-small" data-action="tour-next">' + (isLast ? "Let’s go →" : "Next →") + '</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>'
-  );
-}
-
 function renderErrorBanner(){
   if (!state.error) return '';
   const msg = state.error.message || "";
@@ -875,17 +816,6 @@ function renderAll(){
     ? '<div class="offline-banner">&#9888;&nbsp; No internet connection detected — check your Wi-Fi or mobile data.</div>'
     : '';
   morphdom(app, '<div id="app" class="paper-card">' + renderProgress() + offlineBanner + body + renderErrorBanner() + '</div>');
-
-  // Tour overlay — rendered separately so it floats above the paper card
-  const tourEl = document.getElementById("tour-overlay");
-  if (tourEl) {
-    if (typeof tourStep === "number" && tourStep !== null) {
-      tourEl.innerHTML = renderTour(tourStep);
-      tourEl.style.display = "flex";
-    } else {
-      tourEl.style.display = "none";
-    }
-  }
 }
 
 /* =====================================================================
