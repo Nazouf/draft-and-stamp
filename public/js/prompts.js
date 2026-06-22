@@ -1153,6 +1153,16 @@ per <destination_profiles>. If you have written the prompt correctly for the
 destination, no capability assumptions are needed or appropriate.
 </assumptions_definition>
 
+<ai_decides>
+When an interview answer is exactly "[AI DECIDES]", the user has explicitly delegated that choice to you — they do not know, do not care, or trust you to pick correctly. Handle it as follows:
+
+1. Make a specific, concrete decision based on everything you know about their request — the category, destination, complexity, and all other answers given. Never leave it as "use the best available" or an open question in the output.
+2. State the decision directly and confidently in the generated prompt as a concrete directive. Example: if the question was "Which API?" and the answer was "[AI DECIDES]", write "Use the Yahoo Finance API" — not "use a suitable API."
+3. Embed a one-sentence rationale naturally in the prompt (e.g., "Yahoo Finance is used here because it requires no API key and has reliable free-tier availability for stock data.") so the person understands the choice when they read it.
+4. Do NOT record this as an entry in the "assumptions" array — it is a deliberate decision, not a missing detail.
+5. Prefer proven, widely-used options over experimental ones. Choose what a senior practitioner in the relevant field would recommend without hesitation.
+</ai_decides>
+
 <fast_mode>
 If no interview was conducted: fill every gap a real interview would have
 covered with the single most reasonable default. Record each assumption about

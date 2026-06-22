@@ -24,8 +24,10 @@ function renderReview(){
       html += '<div class="review-row-head">' +
         '<div>' +
           '<div class="review-q">' + esc(item.text) + '</div>' +
-          '<div class="review-a' + (isSkipped ? ' review-a-skipped' : '') + '">' +
-            esc(isSkipped ? item.answer.replace(/^\(skipped — ?/, '').replace(/\)$/, '') + ' (skipped)' : item.answer) +
+          '<div class="review-a' + (isSkipped ? ' review-a-skipped' : (item.answer === '[AI DECIDES]' ? ' review-a-ai' : '')) + '">' +
+            (item.answer === '[AI DECIDES]'
+              ? '✦ AI will decide the best approach'
+              : esc(isSkipped ? item.answer.replace(/^\(skipped — ?/, '').replace(/\)$/, '') + ' (skipped)' : item.answer)) +
           '</div>' +
         '</div>' +
         '<button class="review-edit-btn" data-action="review-edit" data-value="' + i + '">Edit</button>' +
@@ -394,7 +396,8 @@ function renderOptionInput(q){
   const hasPrefill = q.prefill && state.freeTextDraft === q.prefill;
   return (hasPrefill ? '<p class="prefill-note">Inferred from your request — edit if anything\'s off.</p>' : '') +
     '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
-    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Confirm</button></div>';
+    '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Confirm</button></div>' +
+    '<button class="custom-toggle ai-decide-btn" data-action="ai-decides">✦ Let AI choose the best approach for me</button>';
 }
 
 function renderInterview(){
@@ -437,7 +440,7 @@ function renderInterview(){
     html += '<button class="decisions-toggle" data-action="toggle-decisions">' + (state.decisionsOpen?"Hide":"Show") + ' decisions so far</button>';
     if (state.decisionsOpen){
       html += '<div class="decisions-log">' + state.qaHistory.map(item =>
-        '<div class="decision-row"><span class="decision-tick">✓</span><span><span class="decision-q">' + esc(item.text) + '</span> — <span class="decision-a">' + esc(item.answer) + '</span></span></div>'
+        '<div class="decision-row"><span class="decision-tick">✓</span><span><span class="decision-q">' + esc(item.text) + '</span> — <span class="decision-a' + (item.answer === '[AI DECIDES]' ? ' decision-a-ai' : '') + '">' + (item.answer === '[AI DECIDES]' ? '✦ AI decides' : esc(item.answer)) + '</span></span></div>'
       ).join("") + '</div>';
     }
   }

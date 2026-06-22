@@ -940,6 +940,7 @@ document.getElementById("app").addEventListener("click", function(e){
       submitAnswer(state.multiSelections.join(", "));
       break;
     }
+    case "ai-decides": submitAnswer("[AI DECIDES]"); break;
     case "submit-free-text": {
       const input = document.getElementById("free-text-input");
       const val = input ? input.value.trim() : "";
@@ -967,7 +968,7 @@ document.getElementById("app").addEventListener("click", function(e){
       const i = parseInt(el.dataset.value, 10);
       reviewEditIndex = i;
       const cur = state.qaHistory[i].answer;
-      reviewEditValue = cur === "(skipped)" ? "" : cur;
+      reviewEditValue = (cur === "(skipped)" || cur === "[AI DECIDES]") ? "" : cur;
       renderAll();
       const ta = document.getElementById("review-edit-input");
       if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
