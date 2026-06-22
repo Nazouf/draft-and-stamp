@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.26.2";
+const APP_VERSION = "v1.27.0";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -251,9 +251,22 @@ async function callWithRotation(modelPool, body) {
     return { status: upstream.status, data, modelUsed: model };
   }
 
+  // Compute soonest slot recovery so the client can show a countdown
+  const now2 = Date.now();
+  let soonestMs = Infinity;
+  for (const model of activeModels) {
+    for (let i = 0; i < API_KEYS.length; i++) {
+      const slot = slotStats[`${i}:${model}`];
+      if (slot?.last_429_at) {
+        const recovers = new Date(slot.last_429_at).getTime() + QUOTA_COOLDOWN_MS;
+        if (recovers > now2) soonestMs = Math.min(soonestMs, recovers - now2);
+      }
+    }
+  }
+  const waitSec = soonestMs === Infinity ? 60 : Math.ceil(soonestMs / 1000);
   return {
-    status: 503,
-    data: { error: { message: "All API keys and models are currently unavailable — the service may be at capacity. Please try again in a moment." } },
+    status: 429,
+    data: { error: { message: `RATE_LIMITED:${waitSec}` } },
     modelUsed: null
   };
 }
@@ -678,6 +691,65 @@ app.post("/api/admin/models", requireAdmin, async (req, res) => {
     res.json({ ok: true, model, enabled: !!enabled });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: slot cooldown health ──────────────────────────────────────────────
+app.get("/api/admin/slot-health", requireAdmin, (req, res) => {
+  const now = Date.now();
+  const health = {};
+  for (const [key, stat] of Object.entries(slotStats)) {
+    const colonIdx = key.indexOf(":");
+    const model = key.slice(colonIdx + 1);
+    const coolingUntil = stat.last_429_at ? new Date(stat.last_429_at).getTime() + QUOTA_COOLDOWN_MS : null;
+    const cooling = coolingUntil && coolingUntil > now;
+    if (!health[model]) health[model] = { cooling: 0, available: 0, soonestRecoverySec: null };
+    if (cooling) {
+      health[model].cooling++;
+      const sec = Math.ceil((coolingUntil - now) / 1000);
+      if (health[model].soonestRecoverySec === null || sec < health[model].soonestRecoverySec)
+        health[model].soonestRecoverySec = sec;
+    } else {
+      health[model].available++;
+    }
+  }
+  // Include models with no slot data yet as all-available
+  for (const m of ALL_MODELS) {
+    if (!health[m]) health[m] = { cooling: 0, available: API_KEYS.length, soonestRecoverySec: null };
+  }
+  res.json({ health, totalKeys: API_KEYS.length, now });
+});
+
+// ─── Admin: model usage stats ──────────────────────────────────────────────────
+app.get("/api/admin/model-stats", requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.rpc("model_usage_stats");
+    if (error) throw error;
+    res.json({ stats: data });
+  } catch {
+    // Fallback: fetch raw rows and aggregate server-side
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: rows } = await supabaseAdmin
+        .from("runs").select("model_usage").not("model_usage", "is", null)
+        .gte("created_at", since).limit(2000);
+      const counts = {};
+      for (const row of (rows || [])) {
+        const events = Array.isArray(row.model_usage) ? row.model_usage : [];
+        for (const ev of events) {
+          if (!ev.model) continue;
+          if (!counts[ev.model]) counts[ev.model] = { calls: 0, input_tokens: 0, output_tokens: 0 };
+          counts[ev.model].calls++;
+          counts[ev.model].input_tokens  += ev.input  || 0;
+          counts[ev.model].output_tokens += ev.output || 0;
+        }
+      }
+      const stats = Object.entries(counts).map(([model, c]) => ({ model, ...c }))
+        .sort((a, b) => b.calls - a.calls);
+      res.json({ stats });
+    } catch (e2) {
+      res.status(500).json({ error: e2.message });
+    }
   }
 });
 

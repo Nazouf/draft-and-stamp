@@ -438,7 +438,12 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   clearTimeout(timeoutId);
   const data = await response.json();
   if (!response.ok || data.error){
-    throw new Error((data.error && data.error.message) || ("Request failed (" + response.status + ")"));
+    const raw = (data.error && data.error.message) || ("Request failed (" + response.status + ")");
+    if (raw.startsWith("RATE_LIMITED:")) {
+      const sec = parseInt(raw.split(":")[1], 10) || 60;
+      throw new Error("rate_limited:" + sec);
+    }
+    throw new Error(raw);
   }
   const candidate = (data.candidates || [])[0];
   const text = candidate && candidate.content && candidate.content.parts

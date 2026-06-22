@@ -274,8 +274,8 @@ function renderStart(){
     : '';
   return updateBanner +
     '<h1 class="title">Draft &amp; Stamp</h1>' +
-    '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 18px;">your personal prompt engineer</p>' +
-    '<p class="subtitle">Turn a rough idea into a precise prompt another AI can actually use.</p>' +
+    '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 14px;">your personal prompt engineer</p>' +
+    '<p class="subtitle">Vague prompts give mediocre results. Tell us what you want, answer a few focused questions, and we&rsquo;ll write a precise, paste-ready prompt &mdash; tuned for your exact AI tool.</p>' +
     '<label class="field-label" for="request-input">What do you want to create?</label>' +
     '<textarea id="request-input" placeholder="e.g. a tweet about our new coffee blend, or a financial model for a seed round">' + esc(state.originalRequest) + '</textarea>' +
     (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
@@ -359,7 +359,8 @@ function renderOptionInput(q){
         '<span class="option-label">' + esc(o.label) + '</span>' +
         (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
       '</button>'
-    ).join("") + '</div>' + renderCustomToggle(q);
+    ).join("") + '</div>' + renderCustomToggle(q) +
+    '<button class="custom-toggle ai-decide-btn" data-action="ai-decides">✦ Let AI choose the best option for me</button>';
   }
   if (q.input_type === "multi_select"){
     const opts = q.options || [];
@@ -561,18 +562,22 @@ function renderLedger(){
 function renderErrorBanner(){
   if (!state.error) return '';
   const msg = state.error.message || "";
-  const isNetwork  = msg === "network_failure";
-  const isTimeout  = msg === "timeout_failure";
-  const isCapacity = !isNetwork && !isTimeout && (msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("high demand") || msg.includes("overloaded"));
-  const heading = isNetwork  ? "Connection problem"
-                : isTimeout  ? "Request timed out"
-                : isCapacity ? "Service temporarily at capacity"
-                :              "Something went wrong";
-  const errBody = isNetwork  ? "Looks like a network issue — check your Wi-Fi or mobile data and try again. Your progress is saved."
-               : isTimeout  ? "The AI service took too long to respond — this usually fixes itself. Hit Try again; your progress is saved."
-               : isCapacity ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
+  const isNetwork    = msg === "network_failure";
+  const isTimeout    = msg === "timeout_failure";
+  const isRateLimited = msg.startsWith("rate_limited:");
+  const isCapacity   = !isNetwork && !isTimeout && !isRateLimited && (msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("high demand") || msg.includes("overloaded"));
+  const rateSec      = isRateLimited ? (parseInt(msg.split(":")[1], 10) || 60) : 0;
+  const heading = isNetwork     ? "Connection problem"
+                : isTimeout     ? "Request timed out"
+                : isRateLimited ? "Rate limit reached"
+                : isCapacity    ? "Service temporarily at capacity"
+                :                 "Something went wrong";
+  const errBody = isNetwork     ? "Looks like a network issue — check your Wi-Fi or mobile data and try again. Your progress is saved."
+               : isTimeout      ? "The AI service took too long to respond — this usually fixes itself. Hit Try again; your progress is saved."
+               : isRateLimited  ? "All model slots have hit their daily request limit. The next slot frees up in about " + rateSec + " seconds — wait a moment and hit Retry. Your progress is saved."
+               : isCapacity     ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
                : msg;
-  const retryLabel = isCapacity ? "Retry" : "Try again";
+  const retryLabel = (isCapacity || isRateLimited) ? "Retry" : "Try again";
   return '<div class="error-banner"><strong>' + esc(heading) + '</strong><p style="margin:6px 0 12px;">' + esc(errBody) + '</p>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="retry">' + retryLabel + '</button><button class="btn" data-action="start-over">Start over</button></div></div>';
 }

@@ -437,6 +437,7 @@ function setupTabs() {
       document.getElementById("tab-keys").style.display      = currentTab === "keys"     ? "" : "none";
       document.getElementById("tab-settings").style.display  = currentTab === "settings" ? "" : "none";
       document.getElementById("tab-errors").style.display    = currentTab === "errors"   ? "" : "none";
+      if (currentTab !== "settings" && slotHealthInterval) { clearInterval(slotHealthInterval); slotHealthInterval = null; }
       if (currentTab === "runs")     loadRuns();
       if (currentTab === "users")    loadUsers();
       if (currentTab === "feedback") loadFeedback();
@@ -842,23 +843,54 @@ async function loadSettings() {
   await loadModelSettings();
 }
 
+let slotHealthInterval = null;
+
 async function loadModelSettings() {
   const container = document.getElementById("settings-content");
   const existing = document.getElementById("models-panel");
   if (existing) existing.remove();
 
-  const res = await adminFetch("/api/admin/models");
-  if (!res.ok) return;
-  const { models, keyCount } = await res.json();
+  const [modelsRes, healthRes, statsRes] = await Promise.all([
+    adminFetch("/api/admin/models"),
+    adminFetch("/api/admin/slot-health"),
+    adminFetch("/api/admin/model-stats")
+  ]);
+  if (!modelsRes.ok) return;
+  const { models, keyCount } = await modelsRes.json();
+  const { health = {} } = healthRes.ok ? await healthRes.json() : {};
+  const { stats = [] } = statsRes.ok ? await statsRes.json() : {};
+
+  const usageMap = {};
+  for (const s of stats) usageMap[s.model] = s;
 
   const fast   = models.filter(m => m.pool === "fast");
   const strong = models.filter(m => m.pool === "strong");
 
-  const modelRow = (m) => `
+  const healthDot = (model) => {
+    const h = health[model];
+    if (!h) return '';
+    const allCooling = h.cooling > 0 && h.available === 0;
+    const someCooling = h.cooling > 0 && h.available > 0;
+    const color = allCooling ? '#c0392b' : someCooling ? '#e67e22' : '#27ae60';
+    const title = allCooling
+      ? `All ${h.cooling} key(s) cooling — recovers in ~${h.soonestRecoverySec}s`
+      : someCooling
+      ? `${h.cooling} key(s) cooling, ${h.available} available`
+      : `${h.available} key(s) available`;
+    return `<span title="${title}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;flex-shrink:0;"></span>`;
+  };
+
+  const modelRow = (m) => {
+    const u = usageMap[m.model];
+    const usageNote = u ? `${u.calls.toLocaleString()} calls this week` : 'No data yet';
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);" id="model-row-${m.model.replace(/[^a-z0-9]/gi,'_')}">
       <div style="flex:1;">
-        <div style="font-size:0.9rem;color:var(--text);margin-bottom:2px;">${esc(m.label)} <span style="font-size:0.78rem;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;">${esc(m.model)}</span></div>
-        <div style="font-size:0.8rem;color:var(--text-dim);">${m.rpd.toLocaleString()} RPD · ${m.rpm} RPM per key &nbsp;·&nbsp; ${(m.rpd * keyCount).toLocaleString()} RPD total across ${keyCount} keys</div>
+        <div style="display:flex;align-items:center;font-size:0.9rem;color:var(--text);margin-bottom:2px;">
+          ${healthDot(m.model)}
+          ${esc(m.label)} <span style="font-size:0.78rem;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-left:6px;">${esc(m.model)}</span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">${m.rpd.toLocaleString()} RPD · ${m.rpm} RPM · ${(m.rpd * keyCount).toLocaleString()} total &nbsp;·&nbsp; ${usageNote}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
         <span style="font-size:0.8rem;color:${m.enabled ? 'var(--accent)' : 'var(--text-dim)'};" id="model-status-${m.model.replace(/[^a-z0-9]/gi,'_')}">${m.enabled ? 'Enabled' : 'Disabled'}</span>
@@ -869,13 +901,17 @@ async function loadModelSettings() {
         </button>
       </div>
     </div>`;
+  };
 
   const panel = document.createElement("div");
   panel.id = "models-panel";
   panel.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px;">
-      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Fast Pool <span style="font-size:0.78rem;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--text-dim);">classify · considerations · questions · staging</span></div>
-      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Tried in priority order — Gemini first, Gemma as fallback. Each model has a separate daily quota.</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;">Fast Pool <span style="font-size:0.78rem;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--text-dim);">classify · considerations · questions · staging</span></div>
+        <span style="font-size:0.72rem;color:var(--text-dim);" id="health-refresh-note">Live · auto-refreshes</span>
+      </div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Priority order: Gemini first, Gemma fallback. Dot = slot health across ${keyCount} keys.</div>
       ${fast.map(modelRow).join("")}
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;">
@@ -884,6 +920,30 @@ async function loadModelSettings() {
       ${strong.map(modelRow).join("")}
     </div>`;
   container.appendChild(panel);
+
+  // Auto-refresh health dots every 15s while settings tab is open
+  if (slotHealthInterval) clearInterval(slotHealthInterval);
+  slotHealthInterval = setInterval(refreshSlotHealth, 15000);
+}
+
+async function refreshSlotHealth() {
+  const res = await adminFetch("/api/admin/slot-health");
+  if (!res.ok) return;
+  const { health = {} } = await res.json();
+  for (const [model, h] of Object.entries(health)) {
+    const row = document.getElementById("model-row-" + model.replace(/[^a-z0-9]/gi,'_'));
+    if (!row) continue;
+    const dot = row.querySelector("span[title]");
+    if (!dot) continue;
+    const allCooling = h.cooling > 0 && h.available === 0;
+    const someCooling = h.cooling > 0 && h.available > 0;
+    dot.style.background = allCooling ? '#c0392b' : someCooling ? '#e67e22' : '#27ae60';
+    dot.title = allCooling
+      ? `All ${h.cooling} key(s) cooling — recovers in ~${h.soonestRecoverySec}s`
+      : someCooling
+      ? `${h.cooling} key(s) cooling, ${h.available} available`
+      : `${h.available} key(s) available`;
+  }
 }
 
 async function toggleModel(model, enable) {
