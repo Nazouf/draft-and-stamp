@@ -145,27 +145,27 @@
   .how-arrow{color:var(--muted);font-size:1rem;flex-shrink:0;line-height:1;}
 
   /* ---------- example cards ---------- */
-  .examples-section{margin:0 0 6px;}
+  .examples-section{margin:0 0 4px;}
   .examples-label{
-    font-size:0.72rem;font-weight:700;letter-spacing:0.06em;
-    text-transform:uppercase;color:var(--muted);margin-bottom:10px;
+    font-size:0.68rem;font-weight:700;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:7px;
     font-family:'IBM Plex Mono',monospace;
   }
-  .example-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .example-cards{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
   .example-card{
     text-align:left;border:1.5px solid var(--paper-line);
-    background:var(--paper-soft);border-radius:6px;
-    padding:11px 13px;cursor:pointer;font-family:inherit;
+    background:var(--paper-soft);border-radius:5px;
+    padding:8px 10px;cursor:pointer;font-family:inherit;
     transition:border-color .12s ease,background .12s ease;
-    display:flex;flex-direction:column;gap:5px;
+    display:flex;flex-direction:column;gap:3px;
   }
   .example-card:hover{border-color:var(--red);background:#F8EFE8;}
   .example-cat{
-    font-size:0.68rem;font-weight:700;letter-spacing:0.07em;
+    font-size:0.64rem;font-weight:700;letter-spacing:0.07em;
     text-transform:uppercase;color:var(--muted);
     font-family:'IBM Plex Mono',monospace;
   }
-  .example-text{font-size:0.84rem;color:var(--ink);line-height:1.4;}
+  .example-text{font-size:0.78rem;color:var(--ink);line-height:1.35;}
 
   label.field-label{
     display:block;

@@ -248,6 +248,7 @@ function renderTopbar(){
     html += '<span class="topbar-sep"></span>';
     html += '<button class="topbar-btn" data-action="sign-out">Sign out</button>';
     html += '<button class="topbar-btn" data-action="start-over">Start over</button>';
+    html += '<button class="topbar-btn" data-action="tour-replay" title="Replay getting started tour">Tour</button>';
     html += '<span class="topbar-sep"></span>';
   }
   html += '<button class="topbar-btn" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
@@ -273,10 +274,8 @@ function renderStart(){
       '</div>'
     : '';
   const examples = [
-    { cat: "Writing",  dest: "claude",  text: "Write a cover letter for a senior product manager role at a tech company" },
-    { cat: "Code",     dest: "chatgpt", text: "Build a Python script that reads a CSV, removes duplicate rows, and outputs a clean version" },
-    { cat: "Social",   dest: "chatgpt", text: "Write a LinkedIn post announcing my promotion to senior engineer after two years at my company" },
-    { cat: "Finance",  dest: "chatgpt", text: "Create a 3-year revenue forecast model for an e-commerce business I'm starting" },
+    { cat: "Writing", dest: "claude",  text: "Write a cover letter for a senior product manager role at a tech company" },
+    { cat: "Code",    dest: "chatgpt", text: "Build a Python script that reads a CSV, removes duplicate rows, and outputs a clean version" },
   ];
 
   return updateBanner +

@@ -941,6 +941,8 @@ document.getElementById("app").addEventListener("click", function(e){
     case "tour-close":
       tourStep = null; localStorage.setItem("ds_tour_seen","1");
       renderAll(); break;
+    case "tour-replay":
+      tourStep = 0; renderAll(); break;
     case "use-example":
       state.originalRequest = el.dataset.value || "";
       if (el.dataset.dest) state.destination = el.dataset.dest;
