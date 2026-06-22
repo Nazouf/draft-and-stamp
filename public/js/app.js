@@ -308,6 +308,43 @@ function logUsage(step, model, usage){
   state.usageEvents.push({step, model, input_tokens:usage.input_tokens||0, output_tokens:usage.output_tokens||0});
 }
 
+function classifyErrorType(message) {
+  if (!message) return "unknown";
+  if (message === "timeout_failure")  return "timeout";
+  if (message === "network_failure")  return "network";
+  if (message.includes("All API keys") || message.includes("capacity") || message.includes("unavailable") || message.includes("503")) return "capacity";
+  if (message.includes("Too many requests") || message.includes("429") || message.includes("rate")) return "rate_limit";
+  if (message.includes("Sign in") || message.includes("Unauthorized")) return "auth";
+  if (message.includes("free runs this month")) return "monthly_limit";
+  if (message.includes("token limit") || message.includes("MAX_TOKENS")) return "token_limit";
+  if (message.includes("JSON") || message.includes("parse")) return "parse";
+  return "other";
+}
+
+function logErrorToDb(step, message) {
+  const c = state.classification;
+  const payload = {
+    session_id:      funnelSessionId || null,
+    step,
+    error_type:      classifyErrorType(message),
+    error_message:   message || null,
+    request_preview: state.originalRequest ? state.originalRequest.slice(0, 200) : null,
+    category:        c?.primary_category || null,
+    destination:     state.destination || null,
+    complexity:      c?.complexity || null
+  };
+  const headers = { "Content-Type": "application/json" };
+  if (sbClient) {
+    sbClient.auth.getSession().then(function(result) {
+      const token = result?.data?.session?.access_token;
+      if (token) headers["Authorization"] = "Bearer " + token;
+      fetch("/api/errors", { method: "POST", headers, body: JSON.stringify(payload) }).catch(function(){});
+    }).catch(function(){
+      fetch("/api/errors", { method: "POST", headers, body: JSON.stringify(payload) }).catch(function(){});
+    });
+  }
+}
+
 /* =====================================================================
    API — calls this app's own server, which holds the real key. The
    browser never sees it and never talks to Google directly.
@@ -551,6 +588,7 @@ async function runClassify(){
     const c = state.classification;
     fireFunnelEvent("classified", { category: c.primary_category, destination: state.destination, complexity: c.complexity });
   } catch(e){
+    logErrorToDb("classify", e.message);
     state.error = { step:"classify", message:e.message };
     renderAll();
   }
@@ -585,6 +623,7 @@ async function runConsiderations(){
       renderAll();
     }
   } catch(e){
+    logErrorToDb("considerations", e.message);
     state.error = { step:"considerations", message:e.message };
     renderAll();
   }
@@ -654,6 +693,7 @@ async function runSelectQuestion(forceTopic){
     }
   } catch(e){
     clearInterval(questionTimerInterval); questionTimerInterval = null;
+    logErrorToDb("select_question", e.message);
     state.error = { step:"select_question", message:e.message };
     renderAll();
   }
@@ -697,6 +737,7 @@ async function runStagePlanner(){
     state.screen = "staged";
     renderAll();
   } catch(e){
+    logErrorToDb("plan_stages", e.message);
     state.error = { step:"plan_stages", message:e.message };
     renderAll();
   }
@@ -733,6 +774,7 @@ async function runGenerate(){
     startTypewriter();
   } catch(e){
     clearInterval(generateTimerInterval); generateTimerInterval = null;
+    logErrorToDb("generate", e.message);
     state.error = { step:"generate", message:e.message };
     renderAll();
   }

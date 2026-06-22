@@ -214,6 +214,25 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
+// ─── Error logging ────────────────────────────────────────────────────────────
+app.post("/api/errors", async (req, res) => {
+  const user = await verifyUser(req);
+  const { session_id, step, error_type, error_message, request_preview, category, destination, complexity } = req.body || {};
+  if (!step) return res.status(400).json({ error: "step required" });
+  try {
+    await supabaseAdmin.from("errors").insert({
+      user_id: user?.id || null,
+      session_id: session_id || null,
+      step, error_type: error_type || "unknown", error_message: error_message || null,
+      request_preview: request_preview ? String(request_preview).slice(0, 200) : null,
+      category: category || null, destination: destination || null, complexity: complexity || null
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Admin page route ─────────────────────────────────────────────────────────
 app.get("/api/version", (req, res) => {
   res.json({ version: APP_VERSION });
@@ -608,6 +627,34 @@ app.post("/api/admin/rate-limit", requireAdmin, async (req, res) => {
     }
   }
   res.json({ ok: true, enabled: rateLimitEnabled });
+});
+
+// ─── Admin: errors feed ───────────────────────────────────────────────────────
+app.get("/api/admin/errors", requireAdmin, async (req, res) => {
+  const page  = Math.max(0, parseInt(req.query.page || "0"));
+  const limit = 20;
+  try {
+    const [recentRes, summaryRes] = await Promise.all([
+      supabaseAdmin.from("errors")
+        .select("id, created_at, step, error_type, error_message, request_preview, category, destination, complexity", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1),
+      supabaseAdmin.from("errors").select("step, error_type")
+    ]);
+    // Build summary counts
+    const byStep = {}, byType = {};
+    (summaryRes.data || []).forEach(r => {
+      byStep[r.step] = (byStep[r.step] || 0) + 1;
+      byType[r.error_type] = (byType[r.error_type] || 0) + 1;
+    });
+    res.json({
+      errors: recentRes.data || [],
+      total:  recentRes.count || 0,
+      page, limit, byStep, byType
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Admin: export runs as CSV ────────────────────────────────────────────────

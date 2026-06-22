@@ -238,6 +238,7 @@
       <button class="tab-btn" data-tab="feedback">Feedback</button>
       <button class="tab-btn" data-tab="keys">API Keys</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
+      <button class="tab-btn" data-tab="errors">Errors</button>
     </div>
 
     <div id="tab-runs"><div id="runs-filter"></div><div id="runs-content"></div></div>
@@ -245,6 +246,7 @@
     <div id="tab-feedback" style="display:none;"><div id="feedback-content"></div></div>
     <div id="tab-keys" style="display:none;"><div id="keys-content"></div></div>
     <div id="tab-settings" style="display:none;"><div id="settings-content"></div></div>
+    <div id="tab-errors"   style="display:none;"><div id="errors-content"></div></div>
 
   </div>
 </div>
@@ -434,11 +436,13 @@ function setupTabs() {
       document.getElementById("tab-feedback").style.display  = currentTab === "feedback" ? "" : "none";
       document.getElementById("tab-keys").style.display      = currentTab === "keys"     ? "" : "none";
       document.getElementById("tab-settings").style.display  = currentTab === "settings" ? "" : "none";
+      document.getElementById("tab-errors").style.display    = currentTab === "errors"   ? "" : "none";
       if (currentTab === "runs")     loadRuns();
       if (currentTab === "users")    loadUsers();
       if (currentTab === "feedback") loadFeedback();
       if (currentTab === "keys")     loadKeys();
       if (currentTab === "settings") loadSettings();
+      if (currentTab === "errors")   loadErrors();
     };
   });
 }
@@ -717,6 +721,77 @@ async function loadFunnel() {
     </tr>`;
   });
   html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── Errors tab ────────────────────────────────────────────────────────────────
+let errorsPage = 0;
+
+async function loadErrors() {
+  const el = document.getElementById("errors-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch(`/api/admin/errors?page=${errorsPage}`);
+  if (!res.ok) { el.innerHTML = '<div style="color:#E07070;padding:20px 0;">Failed to load.</div>'; return; }
+  const { errors, total, byStep, byType } = await res.json();
+
+  const TYPE_COLOR = {
+    capacity:      "#e67e22",
+    timeout:       "#e74c3c",
+    rate_limit:    "#c0392b",
+    network:       "#9b59b6",
+    auth:          "#3498db",
+    monthly_limit: "#1abc9c",
+    token_limit:   "#f39c12",
+    parse:         "#e91e63",
+    other:         "#7f8c8d",
+    unknown:       "#555"
+  };
+
+  const pill = (label, color) =>
+    `<span style="display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:2px 8px;border-radius:20px;border:1px solid ${color};color:${color};background:${color}18;">${label}</span>`;
+
+  // Summary row
+  const stepOrder = ["classify","considerations","select_question","plan_stages","generate"];
+  const stepSummary = stepOrder.map(s => byStep[s]
+    ? `<span style="margin-right:14px;font-size:0.82rem;"><span style="color:var(--text-dim);">${s.replace(/_/g," ")}</span> <span style="font-family:'IBM Plex Mono',monospace;color:var(--text);">${byStep[s]}</span></span>`
+    : "").join("");
+  const typeSummary = Object.entries(byType).sort((a,b) => b[1]-a[1]).map(([t,n]) =>
+    `<span style="margin-right:10px;">${pill(t, TYPE_COLOR[t]||"#888")} <span style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--text-dim);">${n}</span></span>`
+  ).join("");
+
+  let html = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-bottom:18px;">
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);margin-bottom:10px;">By step</div>
+      <div style="margin-bottom:14px;">${stepSummary || '<span style="color:var(--text-dim);font-size:0.82rem;">No errors yet</span>'}</div>
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);margin-bottom:10px;">By type</div>
+      <div>${typeSummary || '<span style="color:var(--text-dim);font-size:0.82rem;">No errors yet</span>'}</div>
+    </div>`;
+
+  if (!errors.length) {
+    el.innerHTML = html + '<div style="color:var(--text-dim);padding:20px 0;">No errors logged yet.</div>';
+    return;
+  }
+
+  html += `<div style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px;">${total} total error${total !== 1 ? "s" : ""}</div>`;
+  html += `<table class="data-table"><thead><tr>
+    <th>Time</th><th>Step</th><th>Type</th><th>Message</th><th>Request</th><th>Cat</th><th>Dest</th>
+  </tr></thead><tbody>`;
+
+  errors.forEach(e => {
+    const color = TYPE_COLOR[e.error_type] || "#888";
+    html += `<tr>
+      <td class="mono" style="font-size:0.76rem;white-space:nowrap;">${new Date(e.created_at).toLocaleString()}</td>
+      <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--text-dim);">${esc(e.step||"—")}</span></td>
+      <td>${pill(e.error_type||"unknown", color)}</td>
+      <td style="max-width:240px;font-size:0.8rem;color:var(--text-dim);word-break:break-word;">${esc((e.error_message||"—").slice(0,120))}</td>
+      <td><span class="truncate" style="max-width:200px;font-size:0.8rem;">${esc(e.request_preview||"—")}</span></td>
+      <td class="mono" style="font-size:0.76rem;">${esc(e.category||"—")}</td>
+      <td class="mono" style="font-size:0.76rem;">${esc(e.destination||"—")}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  html += renderPagination(total, errorsPage, 20, (p) => { errorsPage = p; loadErrors(); });
   el.innerHTML = html;
 }
 
