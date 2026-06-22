@@ -258,7 +258,7 @@ function renderTopbar(){
 function destinationPills(){
   const opts = [["claude","Claude"],["chatgpt","ChatGPT"],["gemini","Gemini"],["grok","Grok"],
     ["perplexity","Perplexity"],["deepseek","DeepSeek"],["copilot","Microsoft Copilot"],
-    ["midjourney","Midjourney"],["general","General"]];
+    ["midjourney","Midjourney"],["general","Other"]];
   return '<div class="pill-row">' + opts.map(o =>
     '<button class="pill-btn ' + (state.destination===o[0]?"selected":"") + '" data-action="set-destination" data-value="' + o[0] + '">' + esc(o[1]) + '</button>'
   ).join("") + '</div>';
@@ -290,8 +290,14 @@ function renderStart(){
       '<div class="how-step"><span class="how-num">3</span><span class="how-label">Copy your prompt</span></div>' +
     '</div>' +
 
+    '<label class="field-label" for="request-input">Describe what you want</label>' +
+    '<textarea id="request-input" placeholder="e.g. write a professional email asking my client for feedback on the project">' + esc(state.originalRequest) + '</textarea>' +
+    (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
+    '<label class="field-label">Where will you paste this prompt?</label>' +
+    destinationPills() +
+
     '<div class="examples-section">' +
-      '<div class="examples-label">Try an example</div>' +
+      '<div class="examples-label">Or try an example</div>' +
       '<div class="example-cards">' +
         examples.map(ex =>
           '<button class="example-card" data-action="use-example" data-value="' + esc(ex.text) + '" data-dest="' + esc(ex.dest) + '">' +
@@ -302,11 +308,6 @@ function renderStart(){
       '</div>' +
     '</div>' +
 
-    '<label class="field-label" for="request-input">Or describe it yourself</label>' +
-    '<textarea id="request-input" placeholder="e.g. write a professional email asking my client for feedback on the project">' + esc(state.originalRequest) + '</textarea>' +
-    (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
-    '<label class="field-label">Where will you paste this prompt?</label>' +
-    destinationPills() +
     '<div class="btn-row"><button class="btn btn-primary" data-action="start">Start drafting</button></div>';
 }
 
