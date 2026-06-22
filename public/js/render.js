@@ -113,7 +113,6 @@ function renderSharedResult(){
       '<div class="prompt-card-head">' +
         '<div>' +
           '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
-          (p.purpose ? '<div class="prompt-card-purpose">' + esc(p.purpose) + '</div>' : '') +
         '</div>' +
         '<button class="btn btn-small prompt-copy-btn" data-action="shared-copy" data-value="' + i + '">Copy</button>' +
       '</div>' +
@@ -241,7 +240,6 @@ function renderHistory(){
             '<div class="history-prompt-label">' + esc(p.label) + '</div>' +
             '<button class="btn btn-small prompt-copy-btn" data-action="history-copy" data-run="' + esc(run.id) + '" data-pidx="' + i + '">Copy</button>' +
           '</div>' +
-          (p.purpose ? '<div class="history-prompt-purpose">' + esc(p.purpose) + '</div>' : '') +
           '<div class="output-block"><pre class="output-text" id="hprompt-' + esc(run.id) + '-' + i + '">' + esc(p.content) + '</pre></div>' +
         '</div>';
       });
@@ -473,7 +471,6 @@ function renderInterview(){
     ? '<div class="progress-note" style="color:var(--green);">Almost done — wrapping up</div>'
     : '<div class="progress-note">' + state.qaHistory.length + ' decision' + (state.qaHistory.length===1?"":"s") + ' logged so far</div>';
   html += progressLabel +
-    (pending.length ? '<div class="pending-topics">Still need to cover: ' + pending.map(t => esc(t.label)).join(", ") + '</div>' : '') +
     (isCritical ? '<div class="question-priority-badge">Key detail</div>' : '') +
     '<p class="question-text">' + esc(q.text) + '</p>' +
     (q.hint ? '<p class="question-hint">' + esc(q.hint) + '</p>' : '') +
@@ -548,7 +545,6 @@ function renderResult(){
       '<div class="prompt-card-head">' +
         '<div>' +
           '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
-          (p.purpose ? '<div class="prompt-card-purpose">' + esc(p.purpose) + '</div>' : '') +
         '</div>' +
         '<button class="btn btn-small prompt-copy-btn" data-action="copy-prompt" data-value="' + i + '"' + (copyDisabled ? ' disabled style="opacity:0.4;"' : '') + '>Copy prompt</button>' +
       '</div>' +

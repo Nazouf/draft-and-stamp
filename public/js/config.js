@@ -144,7 +144,7 @@ const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 // Aliases used in a few legacy logUsage call sites before modelUsed is returned
 const FAST_MODEL   = FAST_MODELS[0];
 const STRONG_MODEL = STRONG_MODELS[0];
-const APP_VERSION  = "v2.9.1";
+const APP_VERSION  = "v2.9.2";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
