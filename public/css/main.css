@@ -129,6 +129,44 @@
     padding-left:10px;
   }
 
+  /* ---------- how it works row ---------- */
+  .how-it-works{
+    display:flex;align-items:center;gap:10px;
+    margin:20px 0 24px;flex-wrap:wrap;
+  }
+  .how-step{display:flex;align-items:center;gap:8px;}
+  .how-num{
+    width:22px;height:22px;border-radius:50%;
+    background:var(--ink);color:var(--paper);
+    font-size:0.7rem;font-weight:700;font-family:'IBM Plex Mono',monospace;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .how-label{font-size:0.84rem;color:var(--ink);font-weight:500;}
+  .how-arrow{color:var(--muted);font-size:1rem;flex-shrink:0;line-height:1;}
+
+  /* ---------- example cards ---------- */
+  .examples-section{margin:0 0 6px;}
+  .examples-label{
+    font-size:0.72rem;font-weight:700;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:10px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .example-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .example-card{
+    text-align:left;border:1.5px solid var(--paper-line);
+    background:var(--paper-soft);border-radius:6px;
+    padding:11px 13px;cursor:pointer;font-family:inherit;
+    transition:border-color .12s ease,background .12s ease;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .example-card:hover{border-color:var(--red);background:#F8EFE8;}
+  .example-cat{
+    font-size:0.68rem;font-weight:700;letter-spacing:0.07em;
+    text-transform:uppercase;color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .example-text{font-size:0.84rem;color:var(--ink);line-height:1.4;}
+
   label.field-label{
     display:block;
     font-weight:600;
@@ -577,6 +615,9 @@
 
     /* options: make tap targets bigger */
     .option-btn{padding:14px;}
+    .example-cards{grid-template-columns:1fr;}
+    .how-it-works{gap:7px;}
+    .how-label{font-size:0.8rem;}
 
     /* topbar user section */
     .topbar-btn{padding:5px 10px;font-size:0.76rem;}

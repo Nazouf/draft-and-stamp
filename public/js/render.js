@@ -272,12 +272,40 @@ function renderStart(){
         '<button class="update-banner-btn" data-action="refresh-to-update">Refresh to update</button>' +
       '</div>'
     : '';
+  const examples = [
+    { cat: "Writing",  dest: "claude",  text: "Write a cover letter for a senior product manager role at a tech company" },
+    { cat: "Code",     dest: "chatgpt", text: "Build a Python script that reads a CSV, removes duplicate rows, and outputs a clean version" },
+    { cat: "Social",   dest: "chatgpt", text: "Write a LinkedIn post announcing my promotion to senior engineer after two years at my company" },
+    { cat: "Finance",  dest: "chatgpt", text: "Create a 3-year revenue forecast model for an e-commerce business I'm starting" },
+  ];
+
   return updateBanner +
     '<h1 class="title">Draft &amp; Stamp</h1>' +
     '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 14px;">your personal prompt engineer</p>' +
-    '<p class="subtitle">Vague prompts give mediocre results. Tell us what you want, answer a few focused questions, and we&rsquo;ll write a precise, paste-ready prompt &mdash; tuned for your exact AI tool.</p>' +
-    '<label class="field-label" for="request-input">What do you want to create?</label>' +
-    '<textarea id="request-input" placeholder="e.g. a tweet about our new coffee blend, or a financial model for a seed round">' + esc(state.originalRequest) + '</textarea>' +
+    '<p class="subtitle">Vague prompts give mediocre results. Tell us what you want, answer a few questions, and we&rsquo;ll write a precise prompt you can paste straight into any AI.</p>' +
+
+    '<div class="how-it-works">' +
+      '<div class="how-step"><span class="how-num">1</span><span class="how-label">Describe what you want</span></div>' +
+      '<span class="how-arrow">›</span>' +
+      '<div class="how-step"><span class="how-num">2</span><span class="how-label">Answer a few questions</span></div>' +
+      '<span class="how-arrow">›</span>' +
+      '<div class="how-step"><span class="how-num">3</span><span class="how-label">Copy your prompt</span></div>' +
+    '</div>' +
+
+    '<div class="examples-section">' +
+      '<div class="examples-label">Try an example</div>' +
+      '<div class="example-cards">' +
+        examples.map(ex =>
+          '<button class="example-card" data-action="use-example" data-value="' + esc(ex.text) + '" data-dest="' + esc(ex.dest) + '">' +
+            '<span class="example-cat">' + esc(ex.cat) + '</span>' +
+            '<span class="example-text">' + esc(ex.text) + '</span>' +
+          '</button>'
+        ).join("") +
+      '</div>' +
+    '</div>' +
+
+    '<label class="field-label" for="request-input">Or describe it yourself</label>' +
+    '<textarea id="request-input" placeholder="e.g. write a professional email asking my client for feedback on the project">' + esc(state.originalRequest) + '</textarea>' +
     (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
     '<label class="field-label">Where will you paste this prompt?</label>' +
     destinationPills() +

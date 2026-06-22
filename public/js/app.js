@@ -926,6 +926,15 @@ document.getElementById("app").addEventListener("click", function(e){
   const action = el.dataset.action;
   switch(action){
     case "set-destination": state.destination = el.dataset.value; renderAll(); break;
+    case "use-example":
+      state.originalRequest = el.dataset.value || "";
+      if (el.dataset.dest) state.destination = el.dataset.dest;
+      renderAll();
+      setTimeout(() => {
+        const ta = document.getElementById("request-input");
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      }, 50);
+      break;
     case "start": handleStartClick(); break;
     case "continue-after-classification": proceedFromClassification(); break;
     case "toggle-required-topic": toggleRequiredTopic(el.dataset.value); break;
