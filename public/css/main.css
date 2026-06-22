@@ -145,7 +145,7 @@
   .how-arrow{color:var(--muted);font-size:1rem;flex-shrink:0;line-height:1;}
 
   /* ---------- example cards ---------- */
-  .examples-section{margin:0 0 4px;}
+  .examples-section{margin:20px 0 4px;}
   .examples-label{
     font-size:0.68rem;font-weight:700;letter-spacing:0.06em;
     text-transform:uppercase;color:var(--muted);margin-bottom:7px;
