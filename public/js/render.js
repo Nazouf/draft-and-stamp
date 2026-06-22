@@ -311,7 +311,7 @@ function renderStart(){
     '</div>' +
     '<div class="how-compact">① Describe &nbsp;›&nbsp; ② Answer questions &nbsp;›&nbsp; ③ Copy</div>' +
 
-    '<label class="field-label" for="request-input">Describe what you want</label>' +
+    '<label class="field-label" for="request-input">What do you want to make?</label>' +
     '<textarea id="request-input" placeholder="e.g. write a professional email asking my client for feedback on the project">' + esc(state.originalRequest) + '</textarea>' +
     (state.startError ? '<div class="start-error">' + esc(state.startError) + '</div>' : '') +
     '<label class="field-label">Where will you paste this prompt?</label>' +

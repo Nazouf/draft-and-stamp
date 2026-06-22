@@ -622,13 +622,13 @@
     .how-it-works{display:none;}
     .how-compact{
       display:block;
-      font-size:0.78rem;color:var(--muted);
-      border:1px solid var(--paper-line);
-      background:var(--paper-soft);
+      font-size:0.78rem;color:var(--paper);
+      background:var(--ink);
       border-radius:6px;
       padding:8px 12px;
       margin:12px 0 18px;
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      letter-spacing:0.01em;
     }
 
     /* tighten subtitle and title on mobile */
