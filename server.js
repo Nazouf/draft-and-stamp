@@ -24,9 +24,15 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.25.4";
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
+const APP_VERSION = "v1.26.0";
+
+// Model pools — priority order within each pool (first = preferred)
+const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
+const ALL_STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
+const ALL_MODELS        = new Set([...ALL_FAST_MODELS, ...ALL_STRONG_MODELS]);
+
+// Per-model enabled flags — loaded from DB settings at startup, toggled by admin
+const modelEnabled = Object.fromEntries([...ALL_MODELS].map(m => [m, true]));
 
 // Configurable settings — loaded from DB at startup, updated live when admin saves.
 // All timeout values are stored in the DB as seconds; multiplied to ms here.
@@ -70,6 +76,15 @@ let keyStats = API_KEYS.map((_, i) => ({
 }));
 let keyIndex = 0;
 
+// In-memory per (keyIdx, model) slot — tracks cooldown and last-used independently
+// for each key×model combination so quotas don't bleed across models.
+const slotStats = {};
+function getSlot(keyIdx, model) {
+  const k = `${keyIdx}:${model}`;
+  if (!slotStats[k]) slotStats[k] = { last_429_at: null, last_used_at: null };
+  return slotStats[k];
+}
+
 // ─── Settings cache (avoids a DB round-trip on every Gemini call) ─────────────
 let _unrestrictedCache = null, _unrestrictedExpiry = 0;
 
@@ -93,6 +108,11 @@ function applySettingRow(key, value) {
   if (key === "big_crit_cap")            bigCritCap               = Math.max(1, parseInt(value) || 5);
   if (key === "small_enrich_cap")        smallEnrichCap           = Math.max(0, parseInt(value) || 1);
   if (key === "big_enrich_cap")          bigEnrichCap             = Math.max(0, parseInt(value) || 2);
+  // Model enable/disable — key format: "model_enabled:gemini-3.1-flash-lite"
+  if (key.startsWith("model_enabled:")) {
+    const m = key.slice("model_enabled:".length);
+    if (ALL_MODELS.has(m)) modelEnabled[m] = value !== "false";
+  }
 }
 
 async function loadKeyStats() {
@@ -127,50 +147,61 @@ function persistKeyStat(stat) {
   supabaseAdmin.from("gemini_keys").upsert(stat, { onConflict: "key_index" }).then(() => {});
 }
 
-const QUOTA_COOLDOWN_MS = 60_000; // don't retry a key for 60s after a 429
+const QUOTA_COOLDOWN_MS = 60_000; // don't retry a key×model slot for 60s after a 429
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-async function callWithRotation(model, body) {
+// modelPool: ordered array of model strings (priority order — first = preferred).
+// Tries models in priority order; within each model picks the coldest key (LRU).
+// Per (key, model) cooldowns are tracked independently via slotStats.
+async function callWithRotation(modelPool, body) {
   const now = Date.now();
   const isLongRequest = body.generationConfig && body.generationConfig.maxOutputTokens > 2000;
   const keyTimeoutMs = isLongRequest ? serverGenerateTimeoutMs : serverQuickTimeoutMs;
 
-  // Build candidate list — skip disabled, over daily limit, or within 60s cooldown
-  // after a 429. Sort by least-recently-used so load spreads across keys naturally.
+  const activeModels = modelPool.filter(m => modelEnabled[m] !== false);
+  if (activeModels.length === 0) {
+    return { status: 503, data: { error: { message: "All models in this pool are disabled. Enable at least one in Admin → Settings → Models." } }, modelUsed: null };
+  }
+
+  // Build candidate list: priority = model order, LRU keys within each model.
   let candidates = [];
-  for (let i = 0; i < API_KEYS.length; i++) {
-    const idx = (keyIndex + i) % API_KEYS.length;
-    const stat = keyStats[idx];
-    if (!stat) continue;
-    resetTodayIfNeeded(stat);
-    if (!stat.enabled) continue;
-    if (stat.daily_limit > 0 && stat.calls_today >= stat.daily_limit) continue;
-    const last429 = stat.last_429_at ? new Date(stat.last_429_at).getTime() : 0;
-    if (now - last429 < QUOTA_COOLDOWN_MS) continue;
-    candidates.push(idx);
-  }
-
-  // Sort coldest-first: key unused longest gets tried first
-  const coldness = idx => {
-    const t = keyStats[idx]?.last_used_at ? new Date(keyStats[idx].last_used_at).getTime() : 0;
-    return t;
-  };
-  candidates.sort((a, b) => coldness(a) - coldness(b));
-
-  // If every key is on cooldown, fall back to trying them all anyway
-  // (avoids total blackout when all keys hit per-minute limits simultaneously)
-  if (candidates.length === 0) {
+  for (const model of activeModels) {
+    const modelSlots = [];
     for (let i = 0; i < API_KEYS.length; i++) {
-      const idx = (keyIndex + i) % API_KEYS.length;
-      const stat = keyStats[idx];
-      if (stat && stat.enabled) candidates.push(idx);
+      const keyStat = keyStats[i];
+      if (!keyStat) continue;
+      resetTodayIfNeeded(keyStat);
+      if (!keyStat.enabled) continue;
+      const slot = getSlot(i, model);
+      const last429 = slot.last_429_at ? new Date(slot.last_429_at).getTime() : 0;
+      if (now - last429 < QUOTA_COOLDOWN_MS) continue;
+      modelSlots.push({ keyIdx: i, model, slot, keyStat });
     }
-    candidates.sort((a, b) => coldness(a) - coldness(b));
+    modelSlots.sort((a, b) => {
+      const aT = a.slot.last_used_at ? new Date(a.slot.last_used_at).getTime() : 0;
+      const bT = b.slot.last_used_at ? new Date(b.slot.last_used_at).getTime() : 0;
+      return aT - bT;
+    });
+    candidates.push(...modelSlots);
   }
 
-  for (const idx of candidates) {
-    const stat = keyStats[idx];
-    const key = API_KEYS[idx];
+  // Fallback: all slots on cooldown → try coldest anyway to avoid total blackout
+  if (candidates.length === 0) {
+    for (const model of activeModels) {
+      for (let i = 0; i < API_KEYS.length; i++) {
+        const keyStat = keyStats[i];
+        if (keyStat && keyStat.enabled) candidates.push({ keyIdx: i, model, slot: getSlot(i, model), keyStat });
+      }
+    }
+    candidates.sort((a, b) => {
+      const aT = a.slot.last_used_at ? new Date(a.slot.last_used_at).getTime() : 0;
+      const bT = b.slot.last_used_at ? new Date(b.slot.last_used_at).getTime() : 0;
+      return aT - bT;
+    });
+  }
+
+  for (const { keyIdx, model, slot, keyStat } of candidates) {
+    const key = API_KEYS[keyIdx];
     const keyController = new AbortController();
     const keyTimeoutId = setTimeout(() => keyController.abort(), keyTimeoutMs);
 
@@ -188,7 +219,6 @@ async function callWithRotation(model, body) {
       data = await upstream.json();
     } catch(e) {
       clearTimeout(keyTimeoutId);
-      keyIndex = (idx + 1) % API_KEYS.length;
       continue;
     }
     clearTimeout(keyTimeoutId);
@@ -200,30 +230,31 @@ async function callWithRotation(model, body) {
       errMsg.includes("high demand") || errMsg.includes("overloaded") || errMsg.includes("temporarily unavailable");
 
     if (isQuotaError) {
-      stat.error_count_429 = (stat.error_count_429 || 0) + 1;
-      stat.last_429_at = new Date().toISOString(); // starts 60s cooldown
-      persistKeyStat(stat);
-      keyIndex = (idx + 1) % API_KEYS.length;
+      slot.last_429_at = new Date().toISOString();
+      keyStat.error_count_429 = (keyStat.error_count_429 || 0) + 1;
+      keyStat.last_429_at = slot.last_429_at;
+      persistKeyStat(keyStat);
       continue;
     }
 
     if (isCapacityError) {
-      keyIndex = (idx + 1) % API_KEYS.length;
-      await wait(300 + Math.random() * 200); // jitter before next key to avoid thundering herd
+      await wait(300 + Math.random() * 200);
       continue;
     }
 
-    stat.calls_today = (stat.calls_today || 0) + 1;
-    stat.calls_total = (stat.calls_total || 0) + 1;
-    stat.last_used_at = new Date().toISOString();
-    persistKeyStat(stat);
-    keyIndex = idx;
-    return { status: upstream.status, data };
+    const ts = new Date().toISOString();
+    slot.last_used_at = ts;
+    keyStat.calls_today  = (keyStat.calls_today  || 0) + 1;
+    keyStat.calls_total  = (keyStat.calls_total  || 0) + 1;
+    keyStat.last_used_at = ts;
+    persistKeyStat(keyStat);
+    return { status: upstream.status, data, modelUsed: model };
   }
 
   return {
     status: 503,
-    data: { error: { message: `All API keys are currently unavailable — the service may be at capacity. Please try again in a moment.` } }
+    data: { error: { message: "All API keys and models are currently unavailable — the service may be at capacity. Please try again in a moment." } },
+    modelUsed: null
   };
 }
 
@@ -334,10 +365,17 @@ app.post("/api/gemini", geminiLimiter, async (req, res) => {
   }
 
   try {
-    const { model: requestedModel, ...geminiBody } = req.body;
-    const model = (requestedModel && ALLOWED_MODELS.has(requestedModel)) ? requestedModel : DEFAULT_MODEL;
-    const { status, data } = await callWithRotation(model, geminiBody);
-    res.status(status).json(data);
+    const { models: requestedModels, model: requestedModel, ...geminiBody } = req.body;
+    // Accept either a models[] array (new) or legacy single model string
+    let modelPool;
+    if (Array.isArray(requestedModels) && requestedModels.length) {
+      modelPool = requestedModels.filter(m => ALL_MODELS.has(m));
+    } else if (requestedModel && ALL_MODELS.has(requestedModel)) {
+      modelPool = [requestedModel];
+    }
+    if (!modelPool || modelPool.length === 0) modelPool = ALL_FAST_MODELS;
+    const { status, data, modelUsed } = await callWithRotation(modelPool, geminiBody);
+    res.status(status).json(modelUsed ? { ...data, _modelUsed: modelUsed } : data);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
   }
@@ -605,6 +643,42 @@ app.get("/api/admin/app-settings", requireAdmin, (req, res) => {
     small_enrich_cap:        smallEnrichCap,
     big_enrich_cap:          bigEnrichCap
   });
+});
+
+// ─── Admin: model pool management ─────────────────────────────────────────────
+const MODEL_META = {
+  "gemini-3.1-flash-lite": { pool: "fast",   rpd: 500,  rpm: 15, label: "Gemini 3.1 Flash Lite" },
+  "gemma-4-26b-a4b-it":    { pool: "fast",   rpd: 1500, rpm: 15, label: "Gemma 4 26B" },
+  "gemma-4-31b-it":        { pool: "fast",   rpd: 1500, rpm: 15, label: "Gemma 4 31B" },
+  "gemini-2.5-flash":      { pool: "strong", rpd: 20,   rpm: 5,  label: "Gemini 2.5 Flash" },
+  "gemini-3.5-flash":      { pool: "strong", rpd: 20,   rpm: 5,  label: "Gemini 3.5 Flash" },
+};
+
+app.get("/api/admin/models", requireAdmin, (req, res) => {
+  const result = [...ALL_MODELS].map(m => ({
+    model:   m,
+    label:   MODEL_META[m]?.label || m,
+    pool:    MODEL_META[m]?.pool  || "unknown",
+    rpd:     MODEL_META[m]?.rpd   || 0,
+    rpm:     MODEL_META[m]?.rpm   || 0,
+    enabled: modelEnabled[m] !== false
+  }));
+  res.json({ models: result, keyCount: API_KEYS.length });
+});
+
+app.post("/api/admin/models", requireAdmin, async (req, res) => {
+  const { model, enabled } = req.body;
+  if (!ALL_MODELS.has(model)) return res.status(400).json({ error: "Unknown model" });
+  modelEnabled[model] = !!enabled;
+  try {
+    await supabaseAdmin.from("settings").upsert(
+      { key: `model_enabled:${model}`, value: String(!!enabled), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+    res.json({ ok: true, model, enabled: !!enabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Admin: toggle user admin status ──────────────────────────────────────────

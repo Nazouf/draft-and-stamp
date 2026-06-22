@@ -834,11 +834,76 @@ async function loadSettings() {
       ${field("small_enrich_cap", "Small task — enrichment cap",    "Max style/tone/preference questions after all critical questions are done, for small tasks. Set to 0 to skip enrichment entirely. Default: 1.", s.small_enrich_cap, "q", 0)}
       ${field("big_enrich_cap",   "Big task — enrichment cap",      "Max style/tone/preference questions after all critical questions are done, for big tasks. Default: 2.",                                        s.big_enrich_cap,   "q", 0)}
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px;">
       <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Limits</div>
       <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Only applies when Unrestricted Mode is OFF.</div>
       ${field("monthly_run_limit", "Monthly run limit per user", "Number of pipeline runs each account gets per calendar month. Resets on the 1st.", s.monthly_run_limit, "runs")}
     </div>`;
+  await loadModelSettings();
+}
+
+async function loadModelSettings() {
+  const container = document.getElementById("settings-content");
+  const existing = document.getElementById("models-panel");
+  if (existing) existing.remove();
+
+  const res = await adminFetch("/api/admin/models");
+  if (!res.ok) return;
+  const { models, keyCount } = await res.json();
+
+  const fast   = models.filter(m => m.pool === "fast");
+  const strong = models.filter(m => m.pool === "strong");
+
+  const modelRow = (m) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);" id="model-row-${m.model.replace(/[^a-z0-9]/gi,'_')}">
+      <div style="flex:1;">
+        <div style="font-size:0.9rem;color:var(--text);margin-bottom:2px;">${esc(m.label)} <span style="font-size:0.78rem;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;">${esc(m.model)}</span></div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">${m.rpd.toLocaleString()} RPD · ${m.rpm} RPM per key &nbsp;·&nbsp; ${(m.rpd * keyCount).toLocaleString()} RPD total across ${keyCount} keys</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <span style="font-size:0.8rem;color:${m.enabled ? 'var(--accent)' : 'var(--text-dim)'};" id="model-status-${m.model.replace(/[^a-z0-9]/gi,'_')}">${m.enabled ? 'Enabled' : 'Disabled'}</span>
+        <button class="expand-btn" style="min-width:72px;background:${m.enabled ? 'var(--surface2)' : 'var(--accent)'};"
+          onclick="toggleModel('${esc(m.model)}', ${!m.enabled})"
+          id="model-btn-${m.model.replace(/[^a-z0-9]/gi,'_')}">
+          ${m.enabled ? 'Disable' : 'Enable'}
+        </button>
+      </div>
+    </div>`;
+
+  const panel = document.createElement("div");
+  panel.id = "models-panel";
+  panel.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Fast Pool <span style="font-size:0.78rem;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--text-dim);">classify · considerations · questions · staging</span></div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Tried in priority order — Gemini first, Gemma as fallback. Each model has a separate daily quota.</div>
+      ${fast.map(modelRow).join("")}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Strong Pool <span style="font-size:0.78rem;font-family:'IBM Plex Mono',monospace;font-weight:400;color:var(--text-dim);">generate only</span></div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">LRU across both models — each call uses whichever key × model slot was used least recently.</div>
+      ${strong.map(modelRow).join("")}
+    </div>`;
+  container.appendChild(panel);
+}
+
+async function toggleModel(model, enable) {
+  const safeId = model.replace(/[^a-z0-9]/gi, '_');
+  const btn    = document.getElementById(`model-btn-${safeId}`);
+  const status = document.getElementById(`model-status-${safeId}`);
+  btn.disabled = true; btn.textContent = "Saving…";
+  const res = await adminFetch("/api/admin/models", {
+    method: "POST",
+    body: JSON.stringify({ model, enabled: enable })
+  });
+  if (res.ok) {
+    btn.textContent  = enable ? "Disable" : "Enable";
+    btn.style.background = enable ? "var(--surface2)" : "var(--accent)";
+    status.textContent   = enable ? "Enabled" : "Disabled";
+    status.style.color   = enable ? "var(--accent)" : "var(--text-dim)";
+  } else {
+    btn.textContent = "Failed";
+  }
+  btn.disabled = false;
 }
 
 async function saveAppSetting(key) {

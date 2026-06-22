@@ -138,9 +138,13 @@ const STAGE_HINTS = {
   other: "No fixed shape for this category — decide purely from what's genuinely separable in this specific request."
 };
 
-const FAST_MODEL   = "gemini-3.1-flash-lite"; // classify, considerations, questions, staging (500 RPD free tier)
-const STRONG_MODEL = "gemini-2.5-flash";      // generate only (20 RPD, separate quota from FAST_MODEL)
-const APP_VERSION  = "v1.25.4";
+// Ordered model pools — server tries in priority order, falls back down the list
+const FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
+const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
+// Aliases used in a few legacy logUsage call sites before modelUsed is returned
+const FAST_MODEL   = FAST_MODELS[0];
+const STRONG_MODEL = STRONG_MODELS[0];
+const APP_VERSION  = "v1.26.0";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 

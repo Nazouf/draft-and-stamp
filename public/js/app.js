@@ -192,7 +192,8 @@ async function saveRun(){
       // qa_pairs already kept up-to-date by saveProgressToDb — just add the result
       await sbClient.from("runs").update({
         qa_pairs: state.qaHistory,
-        generated_prompts: state.finalResult.prompts
+        generated_prompts: state.finalResult.prompts,
+        model_usage: state.usageEvents
       }).eq("id", currentRunId);
       return currentRunId;
     }
@@ -423,7 +424,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
       headers,
       signal: controller.signal,
       body: JSON.stringify({
-        model: model || STRONG_MODEL,
+        models: Array.isArray(model) ? model : [model || STRONG_MODEL],
         systemInstruction: { parts:[{ text: systemPrompt }] },
         contents: [{ parts:[{ text: userMessage }] }],
         generationConfig: genConfig
@@ -451,7 +452,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
     input_tokens: usageMeta.promptTokenCount || 0,
     output_tokens: (usageMeta.candidatesTokenCount || 0) + (usageMeta.thoughtsTokenCount || 0)
   };
-  return { text, usage };
+  return { text, usage, modelUsed: data._modelUsed || (Array.isArray(model) ? model[0] : model) || STRONG_MODEL };
 }
 
 // Gemini's responseSchema enforcement guarantees valid, fence-free JSON, so
@@ -619,9 +620,9 @@ async function runClassify(){
   funnelSessionId = crypto.randomUUID();
   state.screen = "classifying"; state.error = null; renderAll();
   try{
-    const { text, usage } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODEL);
+    const { text, usage, modelUsed } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODELS);
     state.classification = parseJSON(text);
-    logUsage("classify", FAST_MODEL, usage);
+    logUsage("classify", modelUsed, usage);
     state.screen = "classified";
     renderAll();
     const c = state.classification;
@@ -650,9 +651,9 @@ function afterConsiderations(){
 async function runConsiderations(){
   state.screen = "considerations_loading"; state.error = null; renderAll();
   try{
-    const { text, usage } = await callGemini(CONSIDERATIONS_SYSTEM, buildConsiderationsMsg(), CONSIDERATIONS_SCHEMA, 800, false, FAST_MODEL);
+    const { text, usage, modelUsed } = await callGemini(CONSIDERATIONS_SYSTEM, buildConsiderationsMsg(), CONSIDERATIONS_SCHEMA, 800, false, FAST_MODELS);
     const json = parseJSON(text);
-    logUsage("considerations", FAST_MODEL, usage);
+    logUsage("considerations", modelUsed, usage);
     state.requiredTopics = (json.required_topics || []).map(t => ({id:t.id, label:t.label, reason:t.reason, dismissed:false, covered:false}));
     state.considerationsDone = true;
     if (!state.requiredTopics.length){
@@ -704,8 +705,7 @@ async function runSelectQuestion(forceTopic){
   }, 1000);
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
-    const sqModel = FAST_MODEL;
-    const { text, usage } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, sqModel);
+    const { text, usage, modelUsed: sqModel } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, FAST_MODELS);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);
     const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
@@ -777,11 +777,11 @@ function confirmGenerate(){
 async function runStagePlanner(){
   state.screen = "staging_loading"; state.error = null; renderAll();
   try{
-    const { text, usage } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, FAST_MODEL);
+    const { text, usage, modelUsed } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, FAST_MODELS);
     const rawPlan = parseJSON(text);
     if (rawPlan && rawPlan.stages) rawPlan.stages = rawPlan.stages.slice(0, 4);
     state.stagePlan = rawPlan;
-    logUsage("plan_stages", FAST_MODEL, usage);
+    logUsage("plan_stages", modelUsed, usage);
     state.screen = "staged";
     renderAll();
   } catch(e){
@@ -801,7 +801,7 @@ async function runGenerate(){
   }, 1000);
   state.screen = "generating_loading"; state.error = null; renderAll();
   try{
-    const { text, usage } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, true, STRONG_MODEL);
+    const { text, usage, modelUsed } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, true, STRONG_MODELS);
     const json = parseJSON(text);
     state.finalResult = {
       assumptions: Array.isArray(json.assumptions) ? json.assumptions : [],
@@ -814,7 +814,7 @@ async function runGenerate(){
       }))
     };
     clearInterval(generateTimerInterval); generateTimerInterval = null;
-    logUsage("generate", STRONG_MODEL, usage);
+    logUsage("generate", modelUsed, usage);
     await finalizeSession();
     fireFunnelEvent("generated");
     state.screen = "result";
