@@ -134,6 +134,7 @@
     display:flex;align-items:center;gap:10px;
     margin:20px 0 24px;flex-wrap:wrap;
   }
+  .how-compact{display:none;}
   .how-step{display:flex;align-items:center;gap:8px;}
   .how-num{
     width:22px;height:22px;border-radius:50%;
@@ -617,12 +618,18 @@
     .option-btn{padding:14px;}
     .example-cards{grid-template-columns:1fr;}
 
-    /* how-it-works: single compact line on mobile */
-    .how-it-works{flex-wrap:nowrap;gap:4px;margin:10px 0 16px;overflow:hidden;}
-    .how-step{gap:4px;}
-    .how-num{width:17px;height:17px;font-size:0.6rem;}
-    .how-label{font-size:0.72rem;}
-    .how-arrow{font-size:0.75rem;}
+    /* how-it-works: hide full row, show compact box */
+    .how-it-works{display:none;}
+    .how-compact{
+      display:block;
+      font-size:0.78rem;color:var(--muted);
+      border:1px solid var(--paper-line);
+      background:var(--paper-soft);
+      border-radius:6px;
+      padding:8px 12px;
+      margin:12px 0 18px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
 
     /* tighten subtitle and title on mobile */
     .title{font-size:1.8rem;margin-bottom:4px;}
