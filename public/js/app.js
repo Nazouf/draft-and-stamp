@@ -682,6 +682,7 @@ async function runGenerate(){
       prompts: (Array.isArray(json.prompts) ? json.prompts : []).map((p,i) => ({
         label: p.label || ("Prompt " + (i+1)),
         purpose: p.purpose || null,
+        usage_notes: p.usage_notes || null,
         content: p.content || ""
       }))
     };

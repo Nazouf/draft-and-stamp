@@ -759,7 +759,7 @@ function renderAll(){
     case "history": body = renderHistory(); break;
     default: body = renderStart();
   }
-  morphdom(app, '<div id="app">' + renderProgress() + body + renderErrorBanner() + '</div>');
+  morphdom(app, '<div id="app" class="paper-card">' + renderProgress() + body + renderErrorBanner() + '</div>');
 }
 
 /* =====================================================================
