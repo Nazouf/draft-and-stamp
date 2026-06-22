@@ -1102,6 +1102,7 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   else if (el.dataset.action === "sign-out") signOut();
   else if (el.dataset.action === "show-history") loadHistory(0);
   else if (el.dataset.action === "toggle-dark") toggleDarkMode();
+  else if (el.dataset.action === "tour-replay") { tourStep = 0; renderAll(); }
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){
