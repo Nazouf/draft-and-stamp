@@ -465,6 +465,8 @@ function renderStaged(){
 function renderResult(){
   const r = state.finalResult;
   const multi = r.prompts.length > 1;
+  const destLabels = {claude:"Claude",chatgpt:"ChatGPT",gemini:"Gemini",grok:"Grok",perplexity:"Perplexity",deepseek:"DeepSeek",copilot:"Microsoft Copilot",midjourney:"Midjourney",general:"General"};
+  const destName = destLabels[state.destination] || (state.destination ? state.destination.charAt(0).toUpperCase() + state.destination.slice(1) : "your AI tool");
   let html = '<div class="stamp-wrap"><span class="stamp green">Approved</span></div>';
 
   if (r.assumptions.length){
@@ -479,6 +481,7 @@ function renderResult(){
   }
 
   const copyDisabled = !typewriterDone;
+  html += '<p style="font-size:0.85rem;color:var(--muted);margin:0 0 14px;">Copy ' + (multi ? 'each prompt below and paste it' : 'the prompt below and paste it') + ' into <strong>' + esc(destName) + '</strong> to get your output.</p>';
   html += (copyDisabled ? '<p style="font-size:0.8rem;color:var(--muted);text-align:center;margin:0 0 10px;cursor:pointer;" data-action="complete-typewriter">Generating… click anywhere to reveal</p>' : '');
   html += '<div class="prompt-cards" ' + (copyDisabled ? 'data-action="complete-typewriter" style="cursor:pointer;"' : '') + '>' + r.prompts.map((p,i) =>
     '<div class="prompt-card">' +
@@ -487,7 +490,7 @@ function renderResult(){
           '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
           (p.purpose ? '<div class="prompt-card-purpose">' + esc(p.purpose) + '</div>' : '') +
         '</div>' +
-        '<button class="btn btn-small prompt-copy-btn" data-action="copy-prompt" data-value="' + i + '"' + (copyDisabled ? ' disabled style="opacity:0.4;"' : '') + '>Copy</button>' +
+        '<button class="btn btn-small prompt-copy-btn" data-action="copy-prompt" data-value="' + i + '"' + (copyDisabled ? ' disabled style="opacity:0.4;"' : '') + '>Copy prompt</button>' +
       '</div>' +
       (p.usage_notes ? '<div class="usage-notes-bar">&#9432;&nbsp; ' + esc(p.usage_notes) + '</div>' : '') +
       '<div class="output-block"><pre class="output-text" id="prompt-text-' + i + '">' + esc(p.content) + '</pre></div>' +

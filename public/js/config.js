@@ -140,7 +140,7 @@ const STAGE_HINTS = {
 
 const FAST_MODEL   = "gemini-2.5-flash-lite"; // classify, considerations, questions, staging
 const STRONG_MODEL = "gemini-2.5-flash";      // generate only
-const APP_VERSION  = "v1.23.0";
+const APP_VERSION  = "v1.24.0";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
