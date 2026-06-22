@@ -1082,7 +1082,7 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.dataset.action;
-  if (action === "topbar-more") { topbarMenuOpen = !topbarMenuOpen; renderTopbar(); return; }
+  if (action === "topbar-more") { e.stopPropagation(); topbarMenuOpen = !topbarMenuOpen; renderTopbar(); return; }
   topbarMenuOpen = false;
   if (action === "start-over") startOver();
   else if (action === "open-login") openLogin();
