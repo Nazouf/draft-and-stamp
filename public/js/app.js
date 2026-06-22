@@ -320,16 +320,21 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
     const { data: { session } } = await sbClient.auth.getSession();
     if (session?.access_token) headers["Authorization"] = "Bearer " + session.access_token;
   }
-  const response = await fetch("/api/gemini", {
-    method:"POST",
-    headers,
-    body: JSON.stringify({
-      model: model || STRONG_MODEL,
-      systemInstruction: { parts:[{ text: systemPrompt }] },
-      contents: [{ parts:[{ text: userMessage }] }],
-      generationConfig: genConfig
-    })
-  });
+  let response;
+  try {
+    response = await fetch("/api/gemini", {
+      method:"POST",
+      headers,
+      body: JSON.stringify({
+        model: model || STRONG_MODEL,
+        systemInstruction: { parts:[{ text: systemPrompt }] },
+        contents: [{ parts:[{ text: userMessage }] }],
+        generationConfig: genConfig
+      })
+    });
+  } catch(e) {
+    throw new Error("network_failure");
+  }
   const data = await response.json();
   if (!response.ok || data.error){
     throw new Error((data.error && data.error.message) || ("Request failed (" + response.status + ")"));
@@ -944,6 +949,8 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
 document.getElementById("auth-overlay").addEventListener("click", function(e){
   if (e.target === this) closeLogin();
 });
+window.addEventListener("online",  function(){ renderAll(); });
+window.addEventListener("offline", function(){ renderAll(); });
 document.addEventListener("keydown", function(e){
   if (e.key === "Escape") closeLogin();
 });

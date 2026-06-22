@@ -545,11 +545,14 @@ function renderLedger(){
 function renderErrorBanner(){
   if (!state.error) return '';
   const msg = state.error.message || "";
-  const isCapacity = msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("unavailable");
-  const heading = isCapacity ? "Service temporarily at capacity" : "Something went wrong";
-  const body = isCapacity
-    ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
-    : msg;
+  const isNetwork  = msg === "network_failure";
+  const isCapacity = !isNetwork && (msg.includes("All API keys") || msg.includes("daily limit") || msg.includes("unavailable"));
+  const heading = isNetwork  ? "Connection problem"
+                : isCapacity ? "Service temporarily at capacity"
+                :              "Something went wrong";
+  const body = isNetwork  ? "Looks like a network issue — check your Wi-Fi or mobile data and try again. Your progress is saved."
+             : isCapacity ? "We're handling a lot of requests right now. Wait a moment and hit Retry — your progress is saved."
+             : msg;
   const retryLabel = isCapacity ? "Retry" : "Try again";
   return '<div class="error-banner"><strong>' + esc(heading) + '</strong><p style="margin:6px 0 12px;">' + esc(body) + '</p>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="retry">' + retryLabel + '</button><button class="btn" data-action="start-over">Start over</button></div></div>';
@@ -759,7 +762,10 @@ function renderAll(){
   if (!noStartOver.has(state.screen)){
     body += '<div style="text-align:center;padding-top:22px;margin-top:4px;border-top:1px solid var(--paper-line);"><button data-action="start-over" style="background:none;border:none;color:var(--muted);font-size:0.78rem;cursor:pointer;font-family:inherit;text-decoration:underline;padding:4px;">↩ Start over</button></div>';
   }
-  morphdom(app, '<div id="app" class="paper-card">' + renderProgress() + body + renderErrorBanner() + '</div>');
+  const offlineBanner = !navigator.onLine
+    ? '<div class="offline-banner">&#9888;&nbsp; No internet connection detected — check your Wi-Fi or mobile data.</div>'
+    : '';
+  morphdom(app, '<div id="app" class="paper-card">' + renderProgress() + offlineBanner + body + renderErrorBanner() + '</div>');
 }
 
 /* =====================================================================
