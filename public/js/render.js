@@ -324,19 +324,15 @@ function renderConsiderations(){
   return '' +
     '<div class="stamp-wrap"><span class="stamp amber">' + stampLabel + '</span></div>' +
     '<p class="stamp-sub">' + subText + '</p>' +
-    '<div class="btn-row" style="justify-content:center;margin-bottom:16px;">' +
-      '<button class="btn btn-primary" data-action="continue-after-considerations">These all look relevant — continue</button>' +
-    '</div>' +
-    '<details style="margin-bottom:18px;">' +
-      '<summary style="cursor:pointer;font-size:0.85rem;color:var(--muted);user-select:none;">Review &amp; uncheck anything that doesn\'t apply</summary>' +
-      '<ul class="topic-list" style="margin-top:12px;">' + topics.map(t =>
-        '<li class="topic-row ' + (t.dismissed?"dismissed":"") + '" data-action="toggle-required-topic" data-value="' + esc(t.id) + '">' +
-          '<span class="check-box ' + (t.dismissed?"":"on") + '">' + (t.dismissed?"":"✓") + '</span>' +
-          '<div><div class="topic-label">' + esc(t.label) + '</div><div class="topic-reason">' + esc(t.reason) + '</div></div>' +
-        '</li>'
-      ).join("") + '</ul>' +
-      '<div class="btn-row" style="justify-content:center;"><button class="btn" data-action="continue-after-considerations">Continue with changes</button></div>' +
-    '</details>';
+    '<ul class="topic-list">' + topics.map(t =>
+      '<li class="topic-row ' + (t.dismissed?"dismissed":"") + '" data-action="toggle-required-topic" data-value="' + esc(t.id) + '">' +
+        '<span class="check-box ' + (t.dismissed?"":"on") + '">' + (t.dismissed?"":"✓") + '</span>' +
+        '<div><div class="topic-label">' + esc(t.label) + '</div><div class="topic-reason">' + esc(t.reason) + '</div></div>' +
+      '</li>'
+    ).join("") + '</ul>' +
+    '<div class="btn-row" style="justify-content:center;">' +
+      '<button class="btn btn-primary" data-action="continue-after-considerations">Continue</button>' +
+    '</div>';
 }
 
 function renderCustomToggle(q){
@@ -758,6 +754,10 @@ function renderAll(){
     case "review": body = renderReview(); break;
     case "history": body = renderHistory(); break;
     default: body = renderStart();
+  }
+  const noStartOver = new Set(["start","gate","result","history","shared","shared_loading","shared_error"]);
+  if (!noStartOver.has(state.screen)){
+    body += '<div style="text-align:center;padding-top:22px;margin-top:4px;border-top:1px solid var(--paper-line);"><button data-action="start-over" style="background:none;border:none;color:var(--muted);font-size:0.78rem;cursor:pointer;font-family:inherit;text-decoration:underline;padding:4px;">↩ Start over</button></div>';
   }
   morphdom(app, '<div id="app" class="paper-card">' + renderProgress() + body + renderErrorBanner() + '</div>');
 }

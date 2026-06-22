@@ -583,7 +583,7 @@ async function runSelectQuestion(forceTopic){
   }
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
-    const sqModel = state.qaHistory.length >= 3 ? STRONG_MODEL : FAST_MODEL;
+    const sqModel = FAST_MODEL;
     const { text, usage } = await callGemini(SELECT_QUESTION_SYSTEM, buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, sqModel);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);

@@ -21,7 +21,7 @@ const geminiLimiter = rateLimit({
   message: { error: "Too many requests. Please wait a few minutes and try again." }
 });
 
-const APP_VERSION = "v1.21.2";
+const APP_VERSION = "v1.21.3";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;

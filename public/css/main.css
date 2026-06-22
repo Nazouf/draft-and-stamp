@@ -41,9 +41,9 @@
   }
   .brand{display:flex;align-items:center;gap:10px;}
   .mark{
-    width:22px;height:22px;border-radius:50%;
-    border:2px double #D9785C;
+    width:24px;height:24px;
     flex:0 0 auto;
+    display:block;
   }
   .wordmark{
     font-family:'Fraunces',serif;
