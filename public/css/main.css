@@ -617,10 +617,12 @@
     .option-btn{padding:14px;}
     .example-cards{grid-template-columns:1fr;}
 
-    /* how-it-works: stack vertically on mobile */
-    .how-it-works{flex-direction:column;align-items:flex-start;gap:4px;margin:14px 0 18px;}
-    .how-arrow{transform:rotate(90deg);margin-left:3px;font-size:0.8rem;}
-    .how-label{font-size:0.82rem;}
+    /* how-it-works: single compact line on mobile */
+    .how-it-works{flex-wrap:nowrap;gap:4px;margin:10px 0 16px;overflow:hidden;}
+    .how-step{gap:4px;}
+    .how-num{width:17px;height:17px;font-size:0.6rem;}
+    .how-label{font-size:0.72rem;}
+    .how-arrow{font-size:0.75rem;}
 
     /* tighten subtitle and title on mobile */
     .title{font-size:1.8rem;margin-bottom:4px;}
