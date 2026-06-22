@@ -543,7 +543,6 @@ async function runClassify(){
     renderAll();
     const c = state.classification;
     fireFunnelEvent("classified", { category: c.primary_category, destination: state.destination, complexity: c.complexity });
-    state._stampTimer = setTimeout(proceedFromClassification, 1200);
   } catch(e){
     state.error = { step:"classify", message:e.message };
     renderAll();
@@ -605,7 +604,7 @@ async function runSelectQuestion(forceTopic){
   }
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
-    const sqModel = FAST_MODEL;
+    const sqModel = STRONG_MODEL;
     const { text, usage } = await callGemini(SELECT_QUESTION_SYSTEM, buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, sqModel);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);
