@@ -239,6 +239,8 @@ let historySearchTimer = null;
 
 let generateElapsed = 0;
 let generateTimerInterval = null;
+let questionElapsed = 0;
+let questionTimerInterval = null;
 
 let funnelSessionId = null;
 
@@ -603,6 +605,13 @@ async function runSelectQuestion(forceTopic){
     proceedAfterInterview();
     return;
   }
+  questionElapsed = 0;
+  clearInterval(questionTimerInterval);
+  questionTimerInterval = setInterval(function(){
+    questionElapsed++;
+    const el = document.getElementById("question-timer");
+    if (el) el.textContent = questionElapsed + "s…";
+  }, 1000);
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
     const sqModel = FAST_MODEL;
@@ -627,8 +636,10 @@ async function runSelectQuestion(forceTopic){
       return;
     }
     if (json.action === "complete" || !json.next_question){
+      clearInterval(questionTimerInterval); questionTimerInterval = null;
       proceedAfterInterview();
     } else {
+      clearInterval(questionTimerInterval); questionTimerInterval = null;
       if (state.qaHistory.length === 0) fireFunnelEvent("interview_started");
       state.currentQuestion = json.next_question;
       state.multiSelections = [];
@@ -638,6 +649,7 @@ async function runSelectQuestion(forceTopic){
       renderAll();
     }
   } catch(e){
+    clearInterval(questionTimerInterval); questionTimerInterval = null;
     state.error = { step:"select_question", message:e.message };
     renderAll();
   }
@@ -767,6 +779,8 @@ setInterval(checkForUpdate, 5 * 60 * 1000);
 function startOver(){
   clearTimeout(state._stampTimer);
   clearInterval(state._typeInterval);
+  clearInterval(questionTimerInterval); questionTimerInterval = null;
+  clearInterval(generateTimerInterval); generateTimerInterval = null;
   state = freshState();
   renderAll();
 }

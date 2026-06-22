@@ -751,7 +751,7 @@ function renderAll(){
     case "gate": body = renderGate(); break;
     case "considerations_loading": body = renderLoading("Checking what an expert in this area would flag…"); break;
     case "considerations": body = renderConsiderations(); break;
-    case "loading_question": body = renderLoading("Thinking about what to ask next…"); break;
+    case "loading_question": body = '<p class="loading-line">Thinking about what to ask next… <span id="question-timer" style="color:var(--muted);font-size:0.9em;">' + (questionElapsed > 0 ? questionElapsed + "s…" : "") + '</span><span class="cursor">▌</span></p>'; break;
     case "interview": body = renderInterview(); break;
     case "staging_loading": body = renderLoading("Planning how to break this into stages…"); break;
     case "staged": body = renderStaged(); break;
