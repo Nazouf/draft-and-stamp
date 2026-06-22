@@ -495,7 +495,7 @@ function renderResult(){
         '</div>' +
         '<button class="btn btn-small prompt-copy-btn" data-action="copy-prompt" data-value="' + i + '"' + (copyDisabled ? ' disabled style="opacity:0.4;"' : '') + '>Copy prompt</button>' +
       '</div>' +
-      (p.usage_notes ? '<div class="usage-notes-bar">&#9432;&nbsp; ' + esc(p.usage_notes) + '</div>' : '') +
+      (p.usage_notes ? '<div class="usage-notes-bar">' + esc(p.usage_notes) + '</div>' : '') +
       '<div class="output-block"><pre class="output-text" id="prompt-text-' + i + '">' + esc(p.content) + '</pre></div>' +
     '</div>'
   ).join("") + '</div>';
