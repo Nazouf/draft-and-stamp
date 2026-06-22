@@ -150,24 +150,55 @@ async function updatePassword(){
   setTimeout(() => { authSuccess = null; renderAll(); }, 2500);
 }
 
+// Called on every answer submission — creates the run record on the first answer,
+// then updates qa_pairs on each subsequent one. Fire-and-forget (no await at call site).
+async function saveProgressToDb(){
+  if (!sbClient) return;
+  const c = state.classification;
+  try {
+    if (currentRunId) {
+      await sbClient.from("runs").update({ qa_pairs: state.qaHistory }).eq("id", currentRunId);
+    } else {
+      const { data, error } = await sbClient.from("runs").insert({
+        user_id:       currentUser?.id || null,
+        request:       state.originalRequest,
+        destination:   state.destination,
+        category:      c?.primary_category || null,
+        complexity:    c?.complexity || null,
+        stakes:        c?.stakes || null,
+        output_format: c?.output_format || null,
+        mode:          state.mode,
+        qa_pairs:      state.qaHistory,
+        generated_prompts: null
+      }).select("id").single();
+      if (!error && data) currentRunId = data.id;
+    }
+  } catch(e){ /* silent — progress save is best-effort */ }
+}
+
 async function saveRun(){
   if (!sbClient || !state.finalResult) return null;
   const c = state.classification;
   try{
     if (currentRunId){
-      await sbClient.from("runs").update({ generated_prompts: state.finalResult.prompts }).eq("id", currentRunId);
+      // qa_pairs already kept up-to-date by saveProgressToDb — just add the result
+      await sbClient.from("runs").update({
+        qa_pairs: state.qaHistory,
+        generated_prompts: state.finalResult.prompts
+      }).eq("id", currentRunId);
       return currentRunId;
     }
+    // No interview was conducted (e.g. fast-path) — insert a complete record now
     const { data, error } = await sbClient.from("runs").insert({
-      user_id: currentUser?.id || null,
-      request: state.originalRequest,
-      destination: state.destination,
-      category: c?.primary_category || null,
-      complexity: c?.complexity || null,
-      stakes: c?.stakes || null,
+      user_id:       currentUser?.id || null,
+      request:       state.originalRequest,
+      destination:   state.destination,
+      category:      c?.primary_category || null,
+      complexity:    c?.complexity || null,
+      stakes:        c?.stakes || null,
       output_format: c?.output_format || null,
-      mode: state.mode,
-      qa_pairs: state.qaHistory,
+      mode:          state.mode,
+      qa_pairs:      state.qaHistory,
       generated_prompts: state.finalResult.prompts
     }).select("id").single();
     if (error){ console.error("saveRun:", error.message); return null; }
@@ -710,6 +741,7 @@ function submitAnswer(answerLabel){
   state.currentQuestion = null;
   state.customAnswerMode = false;
   state.freeTextDraft = "";
+  saveProgressToDb(); // fire-and-forget — creates run on first answer, updates qa_pairs on each subsequent
   runSelectQuestion();
 }
 
@@ -827,6 +859,7 @@ function startOver(){
   clearInterval(state._typeInterval);
   clearInterval(questionTimerInterval); questionTimerInterval = null;
   clearInterval(generateTimerInterval); generateTimerInterval = null;
+  currentRunId = null;
   state = freshState();
   renderAll();
 }
