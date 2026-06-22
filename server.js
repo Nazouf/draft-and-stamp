@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.25.1";
+const APP_VERSION = "v1.25.2";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 
@@ -119,28 +119,50 @@ function persistKeyStat(stat) {
   supabaseAdmin.from("gemini_keys").upsert(stat, { onConflict: "key_index" }).then(() => {});
 }
 
+const QUOTA_COOLDOWN_MS = 60_000; // don't retry a key for 60s after a 429
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
 async function callWithRotation(model, body) {
-  const today = todayDate();
-  // Build ordered list of candidate indices starting from keyIndex
-  const candidates = [];
+  const now = Date.now();
+  const isLongRequest = body.generationConfig && body.generationConfig.maxOutputTokens > 2000;
+  const keyTimeoutMs = isLongRequest ? serverGenerateTimeoutMs : serverQuickTimeoutMs;
+
+  // Build candidate list — skip disabled, over daily limit, or within 60s cooldown
+  // after a 429. Sort by least-recently-used so load spreads across keys naturally.
+  let candidates = [];
   for (let i = 0; i < API_KEYS.length; i++) {
-    candidates.push((keyIndex + i) % API_KEYS.length);
+    const idx = (keyIndex + i) % API_KEYS.length;
+    const stat = keyStats[idx];
+    if (!stat) continue;
+    resetTodayIfNeeded(stat);
+    if (!stat.enabled) continue;
+    if (stat.daily_limit > 0 && stat.calls_today >= stat.daily_limit) continue;
+    const last429 = stat.last_429_at ? new Date(stat.last_429_at).getTime() : 0;
+    if (now - last429 < QUOTA_COOLDOWN_MS) continue;
+    candidates.push(idx);
+  }
+
+  // Sort coldest-first: key unused longest gets tried first
+  const coldness = idx => {
+    const t = keyStats[idx]?.last_used_at ? new Date(keyStats[idx].last_used_at).getTime() : 0;
+    return t;
+  };
+  candidates.sort((a, b) => coldness(a) - coldness(b));
+
+  // If every key is on cooldown, fall back to trying them all anyway
+  // (avoids total blackout when all keys hit per-minute limits simultaneously)
+  if (candidates.length === 0) {
+    for (let i = 0; i < API_KEYS.length; i++) {
+      const idx = (keyIndex + i) % API_KEYS.length;
+      const stat = keyStats[idx];
+      if (stat && stat.enabled) candidates.push(idx);
+    }
+    candidates.sort((a, b) => coldness(a) - coldness(b));
   }
 
   for (const idx of candidates) {
     const stat = keyStats[idx];
-    if (!stat) continue;
-    resetTodayIfNeeded(stat);
-    // Skip disabled or over daily limit (0 = unlimited)
-    if (!stat.enabled) continue;
-    if (stat.daily_limit > 0 && stat.calls_today >= stat.daily_limit) continue;
-
     const key = API_KEYS[idx];
-    // Per-key timeout: 25s for quick steps, 100s for generate (>2000 tokens).
-    // This prevents dead Gemini connections from piling up on the server when
-    // the API hangs — without it, every client retry adds another hung socket.
-    const isLongRequest = body.generationConfig && body.generationConfig.maxOutputTokens > 2000;
-    const keyTimeoutMs = isLongRequest ? serverGenerateTimeoutMs : serverQuickTimeoutMs;
     const keyController = new AbortController();
     const keyTimeoutId = setTimeout(() => keyController.abort(), keyTimeoutMs);
 
@@ -159,7 +181,7 @@ async function callWithRotation(model, body) {
     } catch(e) {
       clearTimeout(keyTimeoutId);
       keyIndex = (idx + 1) % API_KEYS.length;
-      continue; // timed out or network error — try next key
+      continue;
     }
     clearTimeout(keyTimeoutId);
 
@@ -171,15 +193,15 @@ async function callWithRotation(model, body) {
 
     if (isQuotaError) {
       stat.error_count_429 = (stat.error_count_429 || 0) + 1;
-      stat.last_429_at = new Date().toISOString();
+      stat.last_429_at = new Date().toISOString(); // starts 60s cooldown
       persistKeyStat(stat);
       keyIndex = (idx + 1) % API_KEYS.length;
       continue;
     }
 
     if (isCapacityError) {
-      // Rotate to next key without logging as 429 — capacity is model-wide, try another key
       keyIndex = (idx + 1) % API_KEYS.length;
+      await wait(300 + Math.random() * 200); // jitter before next key to avoid thundering herd
       continue;
     }
 
