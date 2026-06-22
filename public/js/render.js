@@ -318,7 +318,7 @@ function renderStart(){
       '<span class="how-arrow">›</span>' +
       '<div class="how-step"><span class="how-num">3</span><span class="how-label">Copy your prompt</span></div>' +
     '</div>' +
-    '<div class="how-compact">① Describe &nbsp;›&nbsp; ② Answer questions &nbsp;›&nbsp; ③ Copy</div>' +
+    '<div class="how-compact">① Describe &nbsp;›&nbsp; ② Answer questions &nbsp;›&nbsp; ③ Get prompt</div>' +
 
     '<label class="field-label" for="request-input">What do you want to make?</label>' +
     '<textarea id="request-input" placeholder="e.g. write a professional email asking my client for feedback on the project">' + esc(state.originalRequest) + '</textarea>' +
