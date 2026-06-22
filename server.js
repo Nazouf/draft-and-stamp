@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.25.2";
+const APP_VERSION = "v1.25.3";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 
@@ -97,8 +97,16 @@ function applySettingRow(key, value) {
 
 async function loadKeyStats() {
   if (!supabaseAdmin) return;
+  // Re-seed from current API_KEYS so newly added keys aren't silently dropped
+  keyStats = API_KEYS.map((_, i) => ({
+    key_index: i, enabled: true, daily_limit: 0,
+    calls_today: 0, calls_total: 0, error_count_429: 0,
+    last_used_at: null, last_429_at: null,
+    last_reset_date: new Date().toISOString().slice(0, 10)
+  }));
   const { data } = await supabaseAdmin.from("gemini_keys").select("*").order("key_index");
-  if (data && data.length) keyStats = data;
+  // Merge DB rows over the seed — keys not yet in DB keep fresh defaults
+  if (data) data.forEach(row => { if (row.key_index < keyStats.length) keyStats[row.key_index] = row; });
   // Load all settings rows in one query
   const { data: rows } = await supabaseAdmin.from("settings").select("key, value");
   (rows || []).forEach(r => applySettingRow(r.key, r.value));
