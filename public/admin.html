@@ -237,12 +237,14 @@
       <button class="tab-btn" data-tab="users">Users</button>
       <button class="tab-btn" data-tab="feedback">Feedback</button>
       <button class="tab-btn" data-tab="keys">API Keys</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
     </div>
 
     <div id="tab-runs"><div id="runs-filter"></div><div id="runs-content"></div></div>
     <div id="tab-users" style="display:none;"><div id="users-content"></div></div>
     <div id="tab-feedback" style="display:none;"><div id="feedback-content"></div></div>
     <div id="tab-keys" style="display:none;"><div id="keys-content"></div></div>
+    <div id="tab-settings" style="display:none;"><div id="settings-content"></div></div>
 
   </div>
 </div>
@@ -427,14 +429,16 @@ function setupTabs() {
     btn.onclick = () => {
       currentTab = btn.dataset.tab;
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
-      document.getElementById("tab-runs").style.display = currentTab === "runs" ? "" : "none";
-      document.getElementById("tab-users").style.display = currentTab === "users" ? "" : "none";
-      document.getElementById("tab-feedback").style.display = currentTab === "feedback" ? "" : "none";
-      document.getElementById("tab-keys").style.display = currentTab === "keys" ? "" : "none";
-      if (currentTab === "runs") loadRuns();
-      if (currentTab === "users") loadUsers();
+      document.getElementById("tab-runs").style.display      = currentTab === "runs"     ? "" : "none";
+      document.getElementById("tab-users").style.display     = currentTab === "users"    ? "" : "none";
+      document.getElementById("tab-feedback").style.display  = currentTab === "feedback" ? "" : "none";
+      document.getElementById("tab-keys").style.display      = currentTab === "keys"     ? "" : "none";
+      document.getElementById("tab-settings").style.display  = currentTab === "settings" ? "" : "none";
+      if (currentTab === "runs")     loadRuns();
+      if (currentTab === "users")    loadUsers();
       if (currentTab === "feedback") loadFeedback();
-      if (currentTab === "keys") loadKeys();
+      if (currentTab === "keys")     loadKeys();
+      if (currentTab === "settings") loadSettings();
     };
   });
 }
@@ -714,6 +718,63 @@ async function loadFunnel() {
   });
   html += '</tbody></table>';
   el.innerHTML = html;
+}
+
+// ── Settings tab ─────────────────────────────────────────────────────────────
+async function loadSettings() {
+  const el = document.getElementById("settings-content");
+  el.innerHTML = '<div style="color:var(--text-dim);padding:20px 0;">Loading…</div>';
+  const res = await adminFetch("/api/admin/app-settings");
+  if (!res.ok) { el.innerHTML = '<div style="color:#E07070;padding:20px 0;">Failed to load settings.</div>'; return; }
+  const s = await res.json();
+
+  const field = (key, label, desc, value, unit) => `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:16px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-size:0.9rem;color:var(--text);margin-bottom:2px;">${label}</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">${desc}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <input type="number" id="setting-${key}" value="${value}" min="1"
+          style="width:80px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-size:0.9rem;font-family:'IBM Plex Mono',monospace;text-align:right;">
+        <span style="color:var(--text-dim);font-size:0.82rem;min-width:32px;">${unit}</span>
+        <button class="expand-btn" onclick="saveAppSetting('${key}')" id="save-btn-${key}">Save</button>
+      </div>
+    </div>`;
+
+  el.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin-bottom:20px;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Timeouts</div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Client timeouts abort the request from the browser. Server timeouts abort the individual Gemini key fetch and rotate to the next key.</div>
+      ${field("client_quick_timeout",    "Client — question timeout",         "How long the browser waits for a classify / question / stage call before showing the timeout error.", s.client_quick_timeout,    "sec")}
+      ${field("client_generate_timeout", "Client — generate timeout",         "How long the browser waits for the generate call (the strong model, thinking enabled).",              s.client_generate_timeout, "sec")}
+      ${field("server_quick_timeout",    "Server key — quick timeout",        "How long the server waits per Gemini key for classify / question / stage calls before rotating.",     s.server_quick_timeout,    "sec")}
+      ${field("server_generate_timeout", "Server key — generate timeout",     "How long the server waits per Gemini key for the generate call before rotating.",                     s.server_generate_timeout, "sec")}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Limits</div>
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Only applies when Unrestricted Mode is OFF.</div>
+      ${field("monthly_run_limit", "Monthly run limit per user", "Number of pipeline runs each account gets per calendar month. Resets on the 1st.", s.monthly_run_limit, "runs")}
+    </div>`;
+}
+
+async function saveAppSetting(key) {
+  const input = document.getElementById("setting-" + key);
+  const btn   = document.getElementById("save-btn-" + key);
+  const value = input.value.trim();
+  if (!value || isNaN(Number(value))) return;
+  btn.disabled = true; btn.textContent = "Saving…";
+  const res = await adminFetch("/api/admin/settings", {
+    method: "POST",
+    body: JSON.stringify({ key, value })
+  });
+  if (res.ok) {
+    btn.textContent = "Saved!";
+    setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 1500);
+  } else {
+    btn.textContent = "Failed";
+    setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; }, 1500);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

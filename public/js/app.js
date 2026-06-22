@@ -9,6 +9,8 @@ let currentUser = null;
 let isAdmin = false;
 let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
+let clientQuickTimeoutMs   = 25000;
+let clientGenerateTimeoutMs = 90000;
 let currentRunId = null;
 let authMode = "signin"; // "signin" | "signup"
 let authView = "choice"; // "choice" | "form" | "forgot"
@@ -29,6 +31,8 @@ async function initApp(){
   let cfg = {};
   try { cfg = await fetch("/api/config").then(r => r.json()); } catch(e){ /* offline / no server */ }
   unrestrictedMode = cfg.unrestrictedMode !== false;
+  if (cfg.clientQuickTimeout)    clientQuickTimeoutMs    = cfg.clientQuickTimeout;
+  if (cfg.clientGenerateTimeout) clientGenerateTimeoutMs = cfg.clientGenerateTimeout;
 
   if (cfg.supabaseUrl && cfg.supabaseAnonKey){
     sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
@@ -319,7 +323,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   }
   // AbortController is set up FIRST — before any async work — so even a
   // slow Supabase token refresh is bounded by the overall timeout budget.
-  const timeoutMs = (maxOutputTokens || 1000) > 2000 ? 90000 : 15000;
+  const timeoutMs = (maxOutputTokens || 1000) > 2000 ? clientGenerateTimeoutMs : clientQuickTimeoutMs;
   const controller = new AbortController();
   const timeoutId = setTimeout(function(){ controller.abort(); }, timeoutMs);
   const headers = { "Content-Type":"application/json" };

@@ -24,10 +24,17 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.21.12";
+const APP_VERSION = "v1.22.0";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
-const MONTHLY_FREE_LIMIT = 20;
+
+// Configurable settings — loaded from DB at startup, updated live when admin saves.
+// All timeout values are stored in the DB as seconds; multiplied to ms here.
+let monthlyRunLimit        = 20;
+let serverQuickTimeoutMs   = 25000;
+let serverGenerateTimeoutMs = 100000;
+let clientQuickTimeoutMs   = 25000;
+let clientGenerateTimeoutMs = 90000;
 
 // Supabase admin client — uses service role key, never exposed to the browser.
 const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -67,14 +74,22 @@ async function getUnrestrictedMode() {
   return _unrestrictedCache;
 }
 
+function applySettingRow(key, value) {
+  if (key === "rate_limit_enabled")      rateLimitEnabled         = value !== "false";
+  if (key === "monthly_run_limit")       monthlyRunLimit          = Math.max(1, parseInt(value) || 20);
+  if (key === "server_quick_timeout")    serverQuickTimeoutMs     = Math.max(5,   parseInt(value) || 25)  * 1000;
+  if (key === "server_generate_timeout") serverGenerateTimeoutMs  = Math.max(10,  parseInt(value) || 100) * 1000;
+  if (key === "client_quick_timeout")    clientQuickTimeoutMs     = Math.max(5,   parseInt(value) || 25)  * 1000;
+  if (key === "client_generate_timeout") clientGenerateTimeoutMs  = Math.max(10,  parseInt(value) || 90)  * 1000;
+}
+
 async function loadKeyStats() {
   if (!supabaseAdmin) return;
   const { data } = await supabaseAdmin.from("gemini_keys").select("*").order("key_index");
   if (data && data.length) keyStats = data;
-  // Load rate limit toggle
-  const { data: setting } = await supabaseAdmin.from("settings")
-    .select("value").eq("key", "rate_limit_enabled").single();
-  if (setting) rateLimitEnabled = setting.value !== "false";
+  // Load all settings rows in one query
+  const { data: rows } = await supabaseAdmin.from("settings").select("key, value");
+  (rows || []).forEach(r => applySettingRow(r.key, r.value));
 }
 
 function todayDate() { return new Date().toISOString().slice(0, 10); }
@@ -113,7 +128,7 @@ async function callWithRotation(model, body) {
     // This prevents dead Gemini connections from piling up on the server when
     // the API hangs — without it, every client retry adds another hung socket.
     const isLongRequest = body.generationConfig && body.generationConfig.maxOutputTokens > 2000;
-    const keyTimeoutMs = isLongRequest ? 100000 : 25000;
+    const keyTimeoutMs = isLongRequest ? serverGenerateTimeoutMs : serverQuickTimeoutMs;
     const keyController = new AbortController();
     const keyTimeoutId = setTimeout(() => keyController.abort(), keyTimeoutMs);
 
@@ -216,7 +231,10 @@ app.get("/api/config", async (req, res) => {
   res.json({
     supabaseUrl: process.env.SUPABASE_URL || null,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null,
-    unrestrictedMode: unrestricted
+    unrestrictedMode: unrestricted,
+    clientQuickTimeout: clientQuickTimeoutMs,
+    clientGenerateTimeout: clientGenerateTimeoutMs,
+    monthlyRunLimit
   });
 });
 
@@ -245,9 +263,9 @@ app.post("/api/gemini", geminiLimiter, async (req, res) => {
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .gte("created_at", startOfMonth.toISOString());
-      if ((count || 0) >= MONTHLY_FREE_LIMIT) {
+      if ((count || 0) >= monthlyRunLimit) {
         return res.status(429).json({
-          error: { message: `You've used all ${MONTHLY_FREE_LIMIT} free runs this month. Resets on the 1st.` }
+          error: { message: `You've used all ${monthlyRunLimit} free runs this month. Resets on the 1st.` }
         });
       }
     }
@@ -504,11 +522,23 @@ app.post("/api/admin/settings", requireAdmin, async (req, res) => {
       .from("settings")
       .upsert({ key, value: String(value), updated_at: new Date().toISOString() });
     if (error) throw error;
-    _unrestrictedExpiry = 0; // invalidate cache so next request re-reads from DB
+    _unrestrictedExpiry = 0; // invalidate unrestricted cache
+    applySettingRow(key, String(value)); // update in-memory values immediately
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── Admin: get all app settings ─────────────────────────────────────────────
+app.get("/api/admin/app-settings", requireAdmin, (req, res) => {
+  res.json({
+    client_quick_timeout:    clientQuickTimeoutMs   / 1000,
+    client_generate_timeout: clientGenerateTimeoutMs / 1000,
+    server_quick_timeout:    serverQuickTimeoutMs   / 1000,
+    server_generate_timeout: serverGenerateTimeoutMs / 1000,
+    monthly_run_limit:       monthlyRunLimit
+  });
 });
 
 // ─── Admin: toggle user admin status ──────────────────────────────────────────
