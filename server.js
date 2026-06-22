@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.25.0";
+const APP_VERSION = "v1.25.1";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 
@@ -50,14 +50,16 @@ const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_
   : null;
 
 // ─── Gemini key rotation ───────────────────────────────────────────────────────
-const API_KEYS = [
-  process.env.GEMINI_API_KEY,
-  process.env.GEMINI_API_KEY_2,
-  process.env.GEMINI_API_KEY_3,
-  process.env.GEMINI_API_KEY_4,
-  process.env.GEMINI_API_KEY_5,
-  process.env.GEMINI_API_KEY_6,
-].filter(Boolean);
+// Loads GEMINI_API_KEY, GEMINI_API_KEY_2 … GEMINI_API_KEY_20 — add as many as
+// you have in Render environment variables and they'll be picked up automatically.
+const API_KEYS = (() => {
+  const keys = [];
+  for (let i = 1; i <= 20; i++) {
+    const k = i === 1 ? process.env.GEMINI_API_KEY : process.env[`GEMINI_API_KEY_${i}`];
+    if (k) keys.push(k);
+  }
+  return keys;
+})();
 
 // In-memory key stats — loaded from DB at startup, kept in sync after each call.
 let keyStats = API_KEYS.map((_, i) => ({
