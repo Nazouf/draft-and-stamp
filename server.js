@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v1.21.9";
+const APP_VERSION = "v1.21.10";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 const ALLOWED_MODELS = new Set(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
 const MONTHLY_FREE_LIMIT = 20;
@@ -109,16 +109,33 @@ async function callWithRotation(model, body) {
     if (stat.daily_limit > 0 && stat.calls_today >= stat.daily_limit) continue;
 
     const key = API_KEYS[idx];
-    const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify(body)
-      }
-    );
+    // Per-key timeout: 25s for quick steps, 100s for generate (>2000 tokens).
+    // This prevents dead Gemini connections from piling up on the server when
+    // the API hangs — without it, every client retry adds another hung socket.
+    const isLongRequest = body.generationConfig && body.generationConfig.maxOutputTokens > 2000;
+    const keyTimeoutMs = isLongRequest ? 100000 : 25000;
+    const keyController = new AbortController();
+    const keyTimeoutId = setTimeout(() => keyController.abort(), keyTimeoutMs);
 
-    const data = await upstream.json();
+    let upstream, data;
+    try {
+      upstream = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify(body),
+          signal: keyController.signal
+        }
+      );
+      data = await upstream.json();
+    } catch(e) {
+      clearTimeout(keyTimeoutId);
+      keyIndex = (idx + 1) % API_KEYS.length;
+      continue; // timed out or network error — try next key
+    }
+    clearTimeout(keyTimeoutId);
+
     const errMsg = (data.error && data.error.message) || "";
     const isQuotaError = upstream.status === 429 ||
       (data.error && (data.error.code === 429 || errMsg.includes("quota")));

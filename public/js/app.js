@@ -315,15 +315,25 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   if (enableThinking === false){
     genConfig.thinkingConfig = { thinkingBudget: 0 };
   }
-  const headers = { "Content-Type":"application/json" };
-  if (sbClient){
-    const { data: { session } } = await sbClient.auth.getSession();
-    if (session?.access_token) headers["Authorization"] = "Bearer " + session.access_token;
-  }
-  // Shorter timeout for quick steps; longer for generate which can legitimately take 60-90s
-  const timeoutMs = (maxOutputTokens || 1000) > 2000 ? 90000 : 25000;
+  // AbortController is set up FIRST — before any async work — so even a
+  // slow Supabase token refresh is bounded by the overall timeout budget.
+  const timeoutMs = (maxOutputTokens || 1000) > 2000 ? 90000 : 15000;
   const controller = new AbortController();
   const timeoutId = setTimeout(function(){ controller.abort(); }, timeoutMs);
+  const headers = { "Content-Type":"application/json" };
+  if (sbClient){
+    try {
+      // Race token retrieval against a 5s fuse — if a refresh stalls we
+      // proceed without auth rather than burning the whole timeout budget.
+      const result = await Promise.race([
+        sbClient.auth.getSession(),
+        new Promise(function(_, reject){ setTimeout(function(){ reject(new Error("session_timeout")); }, 5000); })
+      ]);
+      if (result.data && result.data.session && result.data.session.access_token){
+        headers["Authorization"] = "Bearer " + result.data.session.access_token;
+      }
+    } catch(e){ /* proceed without auth token */ }
+  }
   let response;
   try {
     response = await fetch("/api/gemini", {
