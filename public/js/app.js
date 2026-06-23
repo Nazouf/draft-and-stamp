@@ -227,12 +227,12 @@ async function saveRun(){
   const c = state.classification;
   try{
     if (currentRunId){
-      // qa_pairs already kept up-to-date by saveProgressToDb — just add the result
-      await sbClient.from("runs").update({
+      const { error: upErr } = await sbClient.from("runs").update({
         qa_pairs: state.qaHistory,
         generated_prompts: state.finalResult,
         model_usage: state.usageEvents
       }).eq("id", currentRunId);
+      if (upErr) console.error("saveRun update:", upErr.message);
       return currentRunId;
     }
     // No interview was conducted (e.g. fast-path) — insert a complete record now
