@@ -83,6 +83,7 @@ async function initApp(){
       authLoading = false;
       isAdmin = await fetchIsAdmin(currentUser);
       await refreshAnonStatus();
+      if (currentUser) closeLogin();
       renderAll();
     });
   }
