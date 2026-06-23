@@ -1120,6 +1120,11 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     }
     case "history-load-more": loadHistory(historyPage + 1); break;
+    case "history-share": {
+      const url = window.location.origin + "/share/" + el.dataset.value;
+      copyTextToClipboard(url).then(function(){ el.textContent = "Copied!"; setTimeout(function(){ el.textContent = "Share"; }, 2000); }).catch(function(){ el.textContent = "Failed"; setTimeout(function(){ el.textContent = "Share"; }, 2000); });
+      break;
+    }
     case "copy-prompt": copyPrompt(parseInt(el.dataset.value, 10)); break;
     case "copy-all": copyAllPrompts(); break;
     case "share-link": {

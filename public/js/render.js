@@ -229,7 +229,10 @@ function renderHistory(){
         '<div class="history-card-request">' + esc(run.request || "") + '</div>' +
         '<div class="history-card-toggle">' + (isExpanded ? '↑ Collapse' : '↓ Show ' + (promptCount === 1 ? '1 prompt' : promptCount + ' prompts')) + '</div>' +
       '</div>' +
-      '<button data-action="hide-run" data-value="' + esc(run.id) + '" title="Remove from history" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;line-height:1;border-radius:3px;opacity:0.5;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.5\'">×</button>' +
+      '<div style="display:flex;flex-shrink:0;gap:4px;align-items:flex-start;">' +
+        (promptCount ? '<button class="btn btn-small" data-action="history-share" data-value="' + esc(run.id) + '" style="font-size:0.75rem;padding:3px 8px;">Share</button>' : '') +
+        '<button data-action="hide-run" data-value="' + esc(run.id) + '" title="Remove from history" style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;line-height:1;border-radius:3px;opacity:0.5;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.5\'">×</button>' +
+      '</div>' +
       '</div>';
 
     if (isExpanded && promptCount){
