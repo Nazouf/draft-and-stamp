@@ -550,12 +550,19 @@ function buildSelectQuestionMsg(forceTopic){
   let seeds = [];
   cats.forEach(cat => { seeds = seeds.concat(TOPIC_SEEDS[cat] || []); });
   const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
+  const reqWords = (state.originalRequest.trim().match(/\S+/g) || []).length;
+  // A "big" task described in very few words is the danger zone: real usage
+  // shows these under-specified complex requests take the most correction
+  // rounds. Flag it so the model captures the core dimensions before finishing.
+  const underSpecifiedBig = c.complexity === "big" && reqWords < 40;
   const lines = [
     'Original request: "' + state.originalRequest + '"',
     "Destination: " + state.destination,
     "Primary category: " + c.primary_category + (c.secondary_category ? (" (secondary: " + c.secondary_category + ")") : ""),
     "Complexity: " + c.complexity,
     "Stakes: " + c.stakes,
+    "Original request length: " + reqWords + " words",
+    ...(underSpecifiedBig ? ["UNDER-SPECIFIED COMPLEX REQUEST: this is a big task described in very few words — apply <under_specified_complex_requests>: do not finish until length, output shape, direction, and any must-include specifics are captured (or the person declines each)."] : []),
     "Questions asked so far this session: " + state.qaHistory.length,
     ...(function(){
       const n = state.qaHistory.length;

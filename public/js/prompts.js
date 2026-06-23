@@ -641,7 +641,13 @@ single biggest code failure, and a real example pins down the spec better than
 any description. (3) where the code will run — a chat tool (ChatGPT/Claude), a
 local machine or IDE, a browser, a server, or inside Excel/Sheets — this
 determines which libraries are available and how self-contained the code must
-be. Ask these before style, error-handling, or performance preferences.
+be. (4) direction / approach — any constraint on HOW it should be built: a
+particular library or pattern to use or avoid, "keep it simple" vs "make it
+robust", readability vs performance, no external dependencies, etc. After the
+spec itself, approach is the #1 thing people correct on code ("do it
+differently", "use X instead"). Ask this when the request leaves the approach
+open; skip if already clear. Ask these before error-handling or performance
+polish.
 
 IMAGE: Image prompts are one-shot — there is no cheap iteration, so it is worth
 capturing a little more up front. If not already stated — (1) which image tool
@@ -658,12 +664,16 @@ palette, mood, or what-to-avoid (those are enrichment).
 
 RESEARCH: If not already stated — (1) what the research is for and what form the
 output should take — a quick summary, a detailed written report, a comparison
-table, an executive brief, or raw notes to work from. Format and direction are
-the top corrections for research, so settle this first. (2) depth vs breadth —
-one topic in real depth, or a broad scan across many. (3) what the person already
-knows or their level, so the output neither over-explains basics nor talks over
-their head. (2) and (3) can be skipped for a simple factual lookup; (1) is
-always worth asking unless the request already made it clear.
+table, an executive brief, or raw notes to work from. Format is a top correction
+for research, so settle this first. (2) the angle or focus — what specific
+question is really being asked, what to concentrate on, and what to leave out.
+Direction is the #1 substance correction for research ("focus on X", "I meant
+from the angle of Y"); a broad topic with no angle produces a generic info-dump.
+Ask this whenever the request is a bare topic rather than a pointed question.
+(3) depth vs breadth — one topic in real depth, or a broad scan across many.
+(4) what the person already knows or their level, so the output neither
+over-explains basics nor talks over their head. (3) and (4) can be skipped for a
+simple factual lookup; (1) and (2) are worth asking unless already clear.
 
 WRITING (all writing tasks — applies universally after any category-specific
 must-asks above are resolved): Tone, length, and direction are CRITICAL for
@@ -685,9 +695,16 @@ person almost never intended. If not already answered:
     words but then have to re-ask for a different structure. Skip only when the
     format is dictated by the task itself (a tweet is one block; a formal letter
     is paragraphs) or the request already stated it.
+(5) Must-include specifics — are there particular facts, names, numbers, points,
+    or details that have to appear? Missing specifics is one of the top reasons
+    people come back to correct ("you forgot X", "also add Y"). Ask this with
+    free_text, but ONLY when the request is thin on concrete detail — skip it
+    when the person already gave rich specifics or pasted source material, where
+    it would be redundant. A plain "no, nothing specific" is a fine answer; do
+    not push.
 Exception: very simple informal writing (a quick casual message to a friend, a
 brief internal note, anything a person could write in under 2 minutes from
-memory) — skip all four. The defaults are obvious and asking adds friction.
+memory) — skip all five. The defaults are obvious and asking adds friction.
 Never ask any of these if the request already made them clear.
 
 Skip any must-ask if the original request already answered it clearly.
@@ -718,6 +735,27 @@ general audience, a specific named person). Do NOT ask audience for personal,
 internal, casual, or purely creative tasks — there it adds friction without
 changing the output.
 </high_value_enrichment>
+
+<under_specified_complex_requests>
+The context may flag a turn as an "UNDER-SPECIFIED COMPLEX REQUEST" — a big,
+consequential task that the person described in very few words. Real usage shows
+these are the danger zone: they take the most rounds of correction precisely
+because the person gave little to go on and the AI guessed wrong on multiple
+dimensions at once.
+
+When this flag is present, do NOT set action to "complete" early. Treat these
+four as CRITICAL (not enrichment) and make sure each is captured before
+finishing — or that the person has explicitly declined it:
+- the desired length / scope,
+- the output shape or structure,
+- the direction or angle (what to focus on, what to avoid),
+- any must-include specifics (specific facts, names, numbers, points, or
+  sub-questions that have to appear).
+Because they are independent, prefer to gather them efficiently — a single
+ask_batch of the ones that remain is ideal here. The goal is to close the
+specification gap that causes the correction spiral, not to interrogate: still
+stop once these are settled, and still skip any the request already answered.
+</under_specified_complex_requests>
 
 <how_deep_to_go>
 Critical questions have no fixed count cap. Ask every critical question
