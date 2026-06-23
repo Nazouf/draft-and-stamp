@@ -339,12 +339,13 @@
     cursor:pointer;text-decoration:underline;padding:0;display:block;
   }
   .ai-decide-btn{
-    margin-top:10px;color:var(--accent);text-decoration:none;
-    border:1.5px dashed var(--accent);border-radius:6px;padding:8px 14px;
-    font-size:0.84rem;font-weight:500;letter-spacing:0.01em;opacity:0.85;
-    transition:opacity .12s ease,border-style .12s ease;
+    margin-top:10px;text-decoration:none;
+    border:1.5px solid var(--green);border-radius:6px;padding:8px 14px;
+    font-size:0.84rem;font-weight:500;letter-spacing:0.01em;
+    background:var(--green);color:#fff;opacity:1;
+    transition:opacity .12s ease;
   }
-  .ai-decide-btn:hover{opacity:1;border-style:solid;}
+  .ai-decide-btn:hover{opacity:0.88;}
 
   .decisions-toggle{
     margin-top:26px;background:none;border:none;color:var(--muted);font-size:0.82rem;
