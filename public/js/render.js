@@ -294,7 +294,6 @@ function renderTopbar(){
       html += '<div class="topbar-more-menu">' +
         '<button class="topbar-menu-item" data-action="open-feedback">Feedback</button>' +
         '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
-        '<button class="topbar-menu-item" data-action="open-login">Sign in</button>' +
       '</div>';
     }
   }
