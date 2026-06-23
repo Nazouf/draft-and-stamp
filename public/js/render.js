@@ -857,7 +857,7 @@ function renderAll(){
     return;
   }
 
-  if (!currentUser && !anonAccepted){
+  if (!currentUser && (!anonAccepted || anonDailyLimit === 0)){
     body = renderAuthScreen();
     app.innerHTML = body;
     if (authView === "choice") wireAuthChoice();

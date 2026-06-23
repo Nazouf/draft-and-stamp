@@ -243,7 +243,8 @@ async function saveRun(){
       output_format: c?.output_format || null,
       mode:          state.mode,
       qa_pairs:      state.qaHistory,
-      generated_prompts: state.finalResult.prompts
+      generated_prompts: state.finalResult.prompts,
+      model_usage:   state.usageEvents
     }).select("id").single();
     if (error){ console.error("saveRun:", error.message); return null; }
     return data?.id || null;
