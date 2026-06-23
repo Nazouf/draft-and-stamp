@@ -20,7 +20,7 @@ Live on Render. Users paste the result straight into Claude, ChatGPT, Gemini, Mi
 4. **Always bump the version in all three places in every commit:**
    - `server.js` → `const APP_VERSION = "vX.X.X"`
    - `public/js/config.js` → `const APP_VERSION = "vX.X.X"`
-   - `public/index.html` → footer text `v2.X.X` AND the CSS cache-bust query string `?v=2.X.X`
+   - `public/index.html` → footer text `vX.X.X` AND the CSS cache-bust query string `?v=X.X.X`
 5. **Always push after committing.** `git push origin main` immediately after every commit. Render auto-deploys on push.
 
 ---
@@ -57,7 +57,6 @@ Persistent config lives in the `settings` table as key/value pairs. `applySettin
   - `complexity === "small"` → FAST_MODELS, budget 0 (~3-5s)
   - `complexity === "big"`, simple categories (writing/research/image/video/presentation/other) → STRONG_MODELS, budget 1024 (~10-20s)
   - `complexity === "big"`, heavy categories (code/financial_model/legal/agent_prompt) → STRONG_MODELS, budget 5120 (~25-40s)
-- Previously `enableThinking: true` (boolean) sent no thinkingConfig, meaning the API used its full default budget (up to 24k tokens = 60-90s). Now always set explicitly.
 
 ### Auth gate and rendering flow
 `renderAll()` in `render.js` is the single render entry point. It checks in order:
@@ -67,43 +66,79 @@ Persistent config lives in the `settings` table as key/value pairs. `applySettin
 4. `!currentUser && (!anonAccepted || anonDailyLimit === 0)` → inline auth screen inside `#app`
 5. Otherwise → switch on `state.screen`
 
-The auth modal (`#auth-overlay`) is a sibling of `#app` in the DOM — it is OUTSIDE `#app`. Therefore the main delegated click handler on `#app` never sees clicks inside the modal. The `#auth-overlay` element has its own dedicated delegated handler covering all modal button actions.
+The auth modal (`#auth-overlay`) is a sibling of `#app` in the DOM — OUTSIDE `#app`. Therefore the main delegated click handler on `#app` never sees clicks inside the modal. The `#auth-overlay` element has its own dedicated delegated handler.
+
+The feedback modal (`#feedback-overlay`) follows the same pattern — sibling of `#app`, its own delegated handler for close/submit actions.
 
 ### Anonymous (guest) user flow
 - On first visit, non-logged-in users see the auth screen with a "Continue as guest — N free prompts" button (when `anonDailyLimit > 0`)
-- Clicking it sets `localStorage.ds_anon_accepted = '1'` and `anonAccepted = true`, which bypasses the auth gate in `renderAll()`
+- Clicking it sets `localStorage.ds_anon_accepted = '1'` and `anonAccepted = true`, which bypasses the auth gate
 - A UUID token is generated in `localStorage.ds_anon_id` (never changes per browser)
-- Server tracks anon usage in in-memory Maps: `anonByIp` (IP → count/date) and `anonByToken` (token → count/date). Resets daily by date comparison.
-- Limit enforced at the classify step only (first API call of a session). Non-classify steps (interview, generate) always pass through for in-progress sessions.
-- `X-Anon-Token` header sent on every Gemini call; `_step: "classify"` field sent in body for classify calls only. Server strips `_step` before forwarding to Google.
-- **Anon limit enforces independently of Unrestricted Mode** — admin can have unrestricted mode on (no monthly limit for logged-in users) and the anon daily limit still applies.
-- When limit is hit: `startOver()` and `backToStart()` intercept and call `openLoginWithGate("anon_limit")` instead of going back to the start screen. The guest completes their full session uninterrupted; the upsell appears when they try to leave.
-- The upsell modal shows: icon, "You've used your N free prompt(s)", 4 feature bullets (unlimited prompts, save prompts, cross-device, free during beta), reset note, then Google / email sign-in / create account buttons.
+- Server tracks anon usage in in-memory Maps: `anonByIp` (IP → count/date) and `anonByToken` (token → count/date). Resets daily.
+- Limit enforced at the classify step only. Non-classify steps always pass through for in-progress sessions.
+- **Anon limit enforces independently of Unrestricted Mode.**
+- When limit is hit: `startOver()` and `backToStart()` intercept and call `openLoginWithGate("anon_limit")`. The guest completes their session uninterrupted; upsell appears when they try to leave.
 
 ### Run saving
 `saveRun()` in `app.js`:
 - If `currentRunId` exists (set during interview by `saveProgressToDb`): does an UPDATE adding `generated_prompts` and `model_usage`
-- If no `currentRunId` (guest users, fast-path sessions, skipped interview): does an INSERT with all fields including `model_usage: state.usageEvents`
-- Guest runs save with `user_id: null`. They are NOT linked to an account after sign-up (not yet built).
+- If no `currentRunId` (guest users, fast-path sessions, skipped interview): does an INSERT with all fields
+- **`generated_prompts` is saved as `state.finalResult`** — the full object `{assumptions, elevatedStakesNotes, prompts[]}`, NOT just the prompts array. This matters because history reader expects either this object format or a bare array (legacy), handled by:
+  ```js
+  const gp = run.generated_prompts;
+  const prompts = Array.isArray(gp) ? gp : (gp && gp.prompts) || [];
+  ```
+- Guest runs save with `user_id: null`.
+- **RLS UPDATE policy exists** on `runs` table (`CREATE POLICY "Users can update own runs" ON runs FOR UPDATE USING (auth.uid() = user_id)`). This was missing until v3.9.19 and silently blocked all saveRun UPDATE calls.
 
-### `model_usage` field
-Populated on every run (both insert and update paths). Array of `{step, model, input_tokens, output_tokens}` objects. Used by admin model stats page. Was null for all historical runs until v2.9.11 fixed the insert path.
+### My Prompts / history screen
+- Only runs with `generated_prompts IS NOT NULL` are returned by `/api/runs` — incomplete runs are excluded.
+- Runs can be locally hidden via the × button. Hidden run IDs are stored in `localStorage.hiddenRuns` (a JSON array). These runs are NOT deleted from the DB — Fouzan wants all data preserved.
+- The `history-back` action (`state.screen = "start"; renderAll()`) returns to the start screen without resetting state, so any text typed in the main input is preserved.
+- "← Back" button is rendered inline with the "My Prompts" title (flex row, space-between).
+
+### Topbar layout
+- **Desktop:** brand | [My Prompts] [Admin?] [Sign in / Start over / Sign out] [dot-menu ⋮]
+- **Mobile:** brand | [My Prompts] [dot-menu ⋮] — other buttons hidden via `topbar-hide-mobile`
+- **Dot-menu always visible** (both desktop and mobile) — `.topbar-more-btn` is no longer mobile-only in CSS
+- **Desktop dot-menu contents:** user email, Feedback, Dark/Light toggle
+- **Mobile dot-menu adds:** Start over, Sign out (these items have `class="topbar-menu-mobile-only"` — hidden on desktop via CSS, shown in mobile media query)
+- Email address is shown inside the dot-menu only, not in the topbar itself
+
+### Feedback system
+- **In-app feedback modal** (`#feedback-overlay`): triggered by "Feedback" button in topbar (desktop) or dot-menu. Free-text textarea. Submits to `/api/general-feedback` POST endpoint.
+- `/api/general-feedback` saves to `feedback` table with `run_id: null`, `user_id` from verified session or null for guests.
+- **Per-run feedback** (rating sliders) is separate — triggered from the result screen, saves with a `run_id`.
+- Admin Feedback tab shows all feedback. Rows with `run_id: null` (general feedback) show "General" label instead of a "View run" button.
+
+### Share feature
+- Any completed run in My Prompts has a Share button. Generates a `/share/:id` URL.
+- The share page (`renderSharedResult()`) handles empty prompts gracefully with a friendly message instead of a blank page.
+- Share links work without sign-in (public endpoint `/api/share/:id`).
 
 ---
 
-## Current version: v2.9.11
+## Current version: v3.9.25
 
 ### Full version history (recent)
 
 | Version | What changed |
 |---------|-------------|
-| v2.9.5 | Initial anonymous browsing implementation (had architectural bugs) |
-| v2.9.6 | Rebuilt guest flow: `anonAccepted` flag, "Continue as guest" button, auth modal delegation fix, modal auto-close on sign-in |
-| v2.9.7 | "Let AI decide" button filled green on all screen sizes (was mobile-only) |
-| v2.9.8 | Fixed anon limit bypassed by Unrestricted Mode — anon check now independent |
-| v2.9.9 | Upsell popup moved to post-session (startOver/backToStart intercept), full styled upsell modal with feature bullets |
-| v2.9.10 | Thinking budget per complexity/category — small tasks use FAST_MODELS+budget 0, big tasks capped budgets |
 | v2.9.11 | Fixed anonDailyLimit=0 loophole; fixed model_usage null on insert path |
+| v2.9.12 | Added Share button to history cards |
+| v2.9.13 | Share button shown on all history cards regardless of prompt count |
+| v2.9.14 | Added Feedback button + modal; dot-menu now visible on desktop |
+| v2.9.15 | Removed Sign in from anon dot-menu (stays in topbar only) |
+| v2.9.16 | Desktop dot-menu: email/Feedback/Dark-Light only; Start over + Sign out moved outside |
+| v2.9.17 | Removed email chip from desktop topbar (email only in dot-menu now) |
+| v2.9.18 | Mobile dot-menu adds Start over + Sign out; empty share page gets friendly message |
+| v3.9.19 | Fixed generated_prompts never saving correctly (saveRun saved wrong field; added RLS UPDATE policy to runs table) |
+| v3.9.20 | Added error logging to saveRun UPDATE path (was silently failing) |
+| v3.9.21 | My Prompts only shows completed runs (generated_prompts IS NOT NULL filter on /api/runs) |
+| v3.9.22 | Moved "Start a new prompt" button to top of history page |
+| v3.9.23 | "Start a new prompt" button moved inline with "My Prompts" title (right side) |
+| v3.9.24 | "← Back" button preserves typed request; history-back action doesn't reset state |
+| v3.9.25 | Admin feedback table: "General" label for rows with run_id null instead of broken button |
 
 ---
 
@@ -111,14 +146,18 @@ Populated on every run (both insert and update paths). Array of `{step, model, i
 
 Password-protected. Key sections:
 - **Stats:** run counts, active users, category breakdown, model usage breakdown
+- **Runs:** paginated run table with search/filter, expandable run detail modal
+- **Users:** user list with run counts
+- **Feedback:** all feedback submissions. Per-run feedback shows "View run" button; general feedback (no run_id) shows "General" label.
 - **Limits:** monthly run limit per user, anonymous prompts per day, rate limit toggle
 - **Models:** enable/disable individual models, set timeouts
 - **Keys:** view Gemini API key stats (quota usage, 429 counts, last used)
+- **Errors:** DB-logged pipeline errors
 - **Settings:** unrestricted mode toggle, other flags
 
 Key settings stored in `settings` table:
-- `unrestricted_mode` — if true, monthly run limit is not enforced for logged-in users (anon limit still applies)
-- `anon_daily_limit` — integer, how many free prompts a guest can run per day (0 = block all guests)
+- `unrestricted_mode` — if true, monthly run limit not enforced for logged-in users (anon limit still applies)
+- `anon_daily_limit` — integer, free prompts per guest per day (0 = block all guests)
 - `monthly_run_limit` — integer
 - `rate_limit_enabled` — boolean
 - `server_quick_timeout` / `server_generate_timeout` — ms timeouts for API calls
@@ -133,10 +172,10 @@ Key settings stored in `settings` table:
 | `server.js` | Express server, Gemini proxy, auth, rate limiting, key rotation, admin API, all DB writes |
 | `public/js/config.js` | APP_VERSION, model pool arrays, all JSON schemas, TOPIC_SEEDS, STAGE_HINTS |
 | `public/js/prompts.js` | System prompt strings (CLASSIFY_SYSTEM, GENERATE_SYSTEM, etc.) |
-| `public/js/render.js` | All rendering functions including renderAll(), auth modal HTML, history screen |
-| `public/js/app.js` | State, event handlers, callGemini(), pipeline functions (runClassify, runGenerate, etc.), saveRun(), auth logic |
+| `public/js/render.js` | All rendering functions including renderAll(), topbar, history screen, share page, feedback modal |
+| `public/js/app.js` | State, event handlers, callGemini(), pipeline functions, saveRun(), auth logic, feedback submit |
 | `public/css/main.css` | All styles, single file |
-| `public/index.html` | Shell HTML, loads scripts in order, footer version, CSS cache-bust link |
+| `public/index.html` | Shell HTML, loads scripts in order, footer version, CSS cache-bust link, #auth-overlay, #feedback-overlay |
 | `public/admin.html` | Admin panel, self-contained |
 | `.env` | Never committed. Contains GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ADMIN_PASSWORD |
 
@@ -155,6 +194,7 @@ Key settings stored in `settings` table:
 ## Things deliberately NOT built / out of scope
 
 - Saving guest run history to account after sign-up (guest runs with `user_id: null` stay unlinked)
+- Deleting runs from DB (hide-run is localStorage-only by design — Fouzan wants all data preserved)
 - Claude API integration (forbidden by Fouzan)
 - Any build step, bundler, or framework
 - Browser previews during development sessions
@@ -167,5 +207,5 @@ Key settings stored in `settings` table:
 - The question-selector treats `TOPIC_SEEDS` as inspiration, not a checklist. It writes fresh questions. Don't reintroduce a fixed question bank.
 - Required topics from the considerations step are enforced in code — the session can't complete until each is answered or dismissed.
 - CSS cache-busting: always update the `?v=X.X.X` query string on the `<link>` tag in `index.html` when changing CSS.
-- No comments explaining WHAT code does — only WHY if non-obvious (hidden constraint, workaround, subtle invariant).
+- No comments explaining WHAT code does — only WHY if non-obvious.
 - No emojis in code or UI unless Fouzan specifically asks.
