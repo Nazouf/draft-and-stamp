@@ -108,17 +108,24 @@ function renderSharedResult(){
     html += '<p class="staged-order-note">Use these prompts in order, inside the same conversation — do not start a new chat between steps.</p>';
   }
 
-  html += '<div class="prompt-cards">' + prompts.map((p, i) =>
-    '<div class="prompt-card">' +
-      '<div class="prompt-card-head">' +
-        '<div>' +
-          '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
+  if (!prompts.length){
+    html += '<div style="text-align:center;padding:32px 0;color:var(--muted);">' +
+      '<p style="margin:0 0 6px;font-size:1rem;">This session didn\'t produce a prompt.</p>' +
+      '<p style="margin:0;font-size:0.88rem;">The link may be from an incomplete run.</p>' +
+    '</div>';
+  } else {
+    html += '<div class="prompt-cards">' + prompts.map((p, i) =>
+      '<div class="prompt-card">' +
+        '<div class="prompt-card-head">' +
+          '<div>' +
+            '<div class="prompt-card-label">' + esc(p.label) + '</div>' +
+          '</div>' +
+          '<button class="btn btn-small prompt-copy-btn" data-action="shared-copy" data-value="' + i + '">Copy</button>' +
         '</div>' +
-        '<button class="btn btn-small prompt-copy-btn" data-action="shared-copy" data-value="' + i + '">Copy</button>' +
-      '</div>' +
-      '<div class="output-block"><pre class="output-text">' + esc(p.content) + '</pre></div>' +
-    '</div>'
-  ).join("") + '</div>';
+        '<div class="output-block"><pre class="output-text">' + esc(p.content) + '</pre></div>' +
+      '</div>'
+    ).join("") + '</div>';
+  }
 
   html += '<div class="shared-footer">' +
     '<p>Crafted with <strong>Draft &amp; Stamp</strong> — turn any idea into a prompt that actually works.</p>' +
@@ -278,6 +285,8 @@ function renderTopbar(){
         '<div class="topbar-menu-email">' + esc(currentUser.email) + '</div>' +
         '<button class="topbar-menu-item" data-action="open-feedback">Feedback</button>' +
         '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
+        '<button class="topbar-menu-item topbar-menu-mobile-only" data-action="start-over">↩ Start over</button>' +
+        '<button class="topbar-menu-item topbar-menu-mobile-only topbar-menu-signout" data-action="sign-out">Sign out</button>' +
       '</div>';
     }
   }

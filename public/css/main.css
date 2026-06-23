@@ -82,6 +82,7 @@
   .topbar-menu-item:hover{background:rgba(0,0,0,0.04);}
   .topbar-menu-item:last-child{border-bottom:none;}
   .topbar-menu-signout{color:var(--red);}
+  .topbar-menu-mobile-only{display:none;}
   .chip{
     font-family:'IBM Plex Mono',monospace;
     font-size:0.72rem;
@@ -738,6 +739,7 @@
 
     /* topbar: hide clutter, show ⋮ overflow */
     .topbar-hide-mobile{display:none!important;}
+    .topbar-menu-mobile-only{display:block!important;}
     .topbar-right{flex-wrap:nowrap;gap:6px;}
     .topbar-btn{padding:5px 10px;font-size:0.76rem;}
   }
