@@ -623,6 +623,37 @@ unenforceable. Ask this first, before anything else. (2) who are the parties
 and what role does each play? Without identified parties the document cannot
 be drafted. Ask these before clause preferences or formatting questions.
 
+CODE: If not already stated — (1) the programming language, framework, or
+environment — Python, JavaScript, a specific framework, an Excel/Sheets formula,
+SQL, bash, etc. The same task is a completely different output in each, so this
+is foundational — ask it first unless the request or destination already makes
+it obvious. (2) the concrete behaviour: what exactly goes IN and what should
+come OUT — a specific example of the input and the expected result. Wrong-thing-
+built is the single biggest code failure in real usage, and it comes from a
+vague spec; a concrete input/output example prevents it. (3) where the code
+will run — a chat tool (ChatGPT/Claude), a local machine or IDE, a browser, a
+server, or inside Excel/Sheets — this determines which libraries are available
+and how self-contained the code must be. Ask these before style, error-handling,
+or performance preferences.
+
+IMAGE: If not already stated — (1) which image tool the prompt is for —
+Midjourney, DALL-E, Stable Diffusion, Flux, Ideogram, Adobe Firefly — each has
+different syntax and conventions; skip only if the destination already names the
+tool. (2) the main subject and scene — what is actually in the image and what is
+happening. Without a clear subject there is nothing to render. (3) the visual
+style or medium — photorealistic, illustration, 3D render, anime, oil painting,
+flat vector, etc. Style is the most-corrected dimension for images. Ask these
+before lighting, palette, aspect ratio, or what-to-avoid.
+
+RESEARCH: If not already stated — (1) what the research is for and what form the
+output should take — a quick summary, a detailed written report, a comparison
+table, an executive brief, or raw notes to work from. Format and direction are
+the top corrections for research, so settle this first. (2) depth vs breadth —
+one topic in real depth, or a broad scan across many. (3) what the person already
+knows or their level, so the output neither over-explains basics nor talks over
+their head. (2) and (3) can be skipped for a simple factual lookup; (1) is
+always worth asking unless the request already made it clear.
+
 WRITING (all writing tasks — applies universally after any category-specific
 must-asks above are resolved): Tone, length, and direction are CRITICAL for
 every writing task, not enrichment. Without them, the AI picks defaults the
