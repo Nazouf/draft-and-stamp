@@ -1148,7 +1148,34 @@ document.addEventListener("click", function(e){
 });
 
 document.getElementById("auth-overlay").addEventListener("click", function(e){
-  if (e.target === this) closeLogin();
+  // Clicking the backdrop closes the modal.
+  if (e.target === this) { closeLogin(); return; }
+  // Delegate data-action buttons inside the modal (modal is outside #app so the
+  // main #app handler never sees these clicks).
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const action = el.dataset.action;
+  switch(action){
+    case "continue-anon":
+      localStorage.setItem('ds_anon_accepted', '1'); anonAccepted = true; closeLogin(); renderAll(); break;
+    case "auth-google": signInWithGoogle(); break;
+    case "auth-choose-signin":
+      authView = "form"; authMode = "signin"; authError = null; authSuccess = null; refreshAuth(); break;
+    case "auth-choose-signup":
+      authView = "form"; authMode = "signup"; authError = null; authSuccess = null; refreshAuth(); break;
+    case "auth-back":
+      authView = "choice"; authError = null; authSuccess = null; refreshAuth(); break;
+    case "auth-forgot":
+      authView = "forgot"; authError = null; authSuccess = null; refreshAuth(); break;
+    case "auth-back-to-signin":
+      authView = "form"; authMode = "signin"; authError = null; authSuccess = null; refreshAuth(); break;
+    case "auth-submit-forgot": forgotPasswordWithEmail(); break;
+    case "auth-update-password": updatePassword(); break;
+    case "auth-submit":
+      if (authMode === "signup") signUpWithEmail(); else signInWithEmail(); break;
+    case "auth-toggle":
+      authMode = (authMode === "signin") ? "signup" : "signin"; authError = null; authSuccess = null; refreshAuth(); break;
+  }
 });
 window.addEventListener("online",  function(){ renderAll(); });
 window.addEventListener("offline", function(){ renderAll(); });
