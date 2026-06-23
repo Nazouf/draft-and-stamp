@@ -205,6 +205,7 @@ function renderHistory(){
     '<h2 class="history-title">My Prompts</h2>' +
     '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + (historySearch.trim() ? " matching &ldquo;" + esc(historySearch.trim()) + "&rdquo;" : " saved") : "Your saved prompts appear here") + '</p>' +
   '</div>' +
+  '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>' +
   '<input type="search" class="history-search" placeholder="Search prompts…" value="' + esc(historySearch) + '" oninput="onHistorySearch(this.value)">';
 
   const visibleRuns = historyRuns.filter(r => !hiddenRunIds.has(r.id));
@@ -266,7 +267,6 @@ function renderHistory(){
       '<button class="btn" data-action="history-load-more">' + (historyLoading ? 'Loading…' : 'Load more') + '</button>' +
     '</div>';
   }
-  html += '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>';
   return html;
 }
 
