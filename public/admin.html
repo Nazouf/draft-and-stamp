@@ -839,6 +839,7 @@ async function loadSettings() {
       <div style="font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:4px;">Limits</div>
       <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:4px;">Only applies when Unrestricted Mode is OFF.</div>
       ${field("monthly_run_limit", "Monthly run limit per user", "Number of pipeline runs each account gets per calendar month. Resets on the 1st.", s.monthly_run_limit, "runs")}
+      ${field("anon_daily_limit", "Anonymous prompts per day", "Free prompts a visitor can run per day without signing in (tracked by IP + browser token). Set to 0 to block anonymous use entirely.", s.anon_daily_limit, "prompts", 0)}
     </div>`;
   await loadModelSettings();
 }

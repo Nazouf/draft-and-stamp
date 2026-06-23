@@ -257,6 +257,15 @@
   body.dark .update-banner-btn{background:#4a7c4a;color:#fff;}
   body.dark .update-banner-btn:hover{background:#3a6a3a;}
 
+  /* ---------- anon banner ---------- */
+  .anon-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--paper-soft,#f5f0e8);border:1.5px solid var(--paper-line,rgba(217,207,184,0.7));
+    border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:0.875rem;color:var(--muted);}
+  .anon-banner-link{flex-shrink:0;background:none;border:none;color:var(--accent,#D9785C);
+    font-size:0.875rem;font-family:inherit;cursor:pointer;text-decoration:underline;padding:0;}
+  .anon-banner-link:hover{opacity:0.8;}
+  body.dark .anon-banner{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1);}
+
   /* ---------- loading ---------- */
   .loading-line{
     font-family:'IBM Plex Mono',monospace;

@@ -302,9 +302,20 @@ function renderStart(){
         '<button class="update-banner-btn" data-action="refresh-to-update">Refresh to update</button>' +
       '</div>'
     : '';
+
+  const anonBanner = (!currentUser && !unrestrictedMode && anonDailyLimit > 0 && anonRemaining !== null)
+    ? '<div class="anon-banner">' +
+        (anonRemaining > 0
+          ? '<span>' + anonRemaining + ' free prompt' + (anonRemaining !== 1 ? 's' : '') + ' left today</span>' +
+            '<button class="anon-banner-link" data-action="open-login">Sign in for unlimited</button>'
+          : '<span>Free prompts used up for today</span>' +
+            '<button class="anon-banner-link" data-action="open-login">Sign in to continue</button>') +
+      '</div>'
+    : '';
+
   const examples = SESSION_EXAMPLES;
 
-  return updateBanner +
+  return updateBanner + anonBanner +
     '<h1 class="title">Draft &amp; Stamp</h1>' +
     '<p style="font-style:italic;color:var(--muted);font-size:0.95rem;margin:2px 0 14px;">your personal prompt engineer</p>' +
     '<p class="subtitle">Vague prompts give mediocre results. Tell us what you want, answer a few questions, and we&rsquo;ll write a precise prompt you can paste straight into any AI.</p>' +
@@ -360,10 +371,15 @@ function renderClassified(){
 }
 
 function renderGate(){
+  const isAnonLimit = state.gateReason === "anon_limit";
+  const title = isAnonLimit ? "Free prompts used up" : "Sign in to continue";
+  const sub   = isAnonLimit
+    ? "You&rsquo;ve used your " + anonDailyLimit + " free prompt" + (anonDailyLimit !== 1 ? "s" : "") + " for today. Create a free account to keep going &mdash; resets tomorrow."
+    : "Create a free account to keep using Draft &amp; Stamp.";
   return '' +
     '<div class="gate-icon">&#9863;</div>' +
-    '<h1 class="title" style="text-align:center;font-size:1.5rem;">Sign in to continue</h1>' +
-    '<p class="subtitle" style="text-align:center;">Create a free account to keep using Draft &amp; Stamp.</p>' +
+    '<h1 class="title" style="text-align:center;font-size:1.5rem;">' + title + '</h1>' +
+    '<p class="subtitle" style="text-align:center;">' + sub + '</p>' +
     '<div class="btn-row" style="justify-content:center;">' +
       '<button class="btn btn-primary" data-action="open-login">Sign in / Sign up</button>' +
       '<button class="btn" data-action="back-to-start">Back</button>' +

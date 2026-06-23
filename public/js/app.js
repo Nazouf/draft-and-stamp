@@ -16,6 +16,16 @@ let smallCritCap   = 3;
 let bigCritCap     = 5;
 let smallEnrichCap = 1;
 let bigEnrichCap   = 2;
+let anonDailyLimit = 2;
+let anonRemaining  = null; // null = not yet fetched
+
+// Persistent anonymous identity — one UUID per browser, lives in localStorage.
+const anonToken = (function() {
+  let t = localStorage.getItem("ds_anon_id");
+  if (!t) { t = crypto.randomUUID(); localStorage.setItem("ds_anon_id", t); }
+  return t;
+})();
+
 let currentRunId = null;
 let authMode = "signin"; // "signin" | "signup"
 let authView = "choice"; // "choice" | "form" | "forgot"
@@ -32,6 +42,16 @@ async function fetchIsAdmin(user){
   } catch(e){ return false; }
 }
 
+async function refreshAnonStatus(){
+  if (currentUser || unrestrictedMode) { anonRemaining = null; return; }
+  try {
+    const res = await fetch("/api/anon-status?token=" + encodeURIComponent(anonToken));
+    const data = await res.json();
+    anonRemaining = data.remaining;
+    if (data.limit != null) anonDailyLimit = data.limit;
+  } catch(e){ anonRemaining = anonDailyLimit; }
+}
+
 async function initApp(){
   let cfg = {};
   try { cfg = await fetch("/api/config").then(r => r.json()); } catch(e){ /* offline / no server */ }
@@ -42,6 +62,7 @@ async function initApp(){
   if (cfg.bigCritCap     != null) bigCritCap     = cfg.bigCritCap;
   if (cfg.smallEnrichCap != null) smallEnrichCap = cfg.smallEnrichCap;
   if (cfg.bigEnrichCap   != null) bigEnrichCap   = cfg.bigEnrichCap;
+  if (cfg.anonDailyLimit != null) anonDailyLimit = cfg.anonDailyLimit;
 
   if (cfg.supabaseUrl && cfg.supabaseAnonKey){
     sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
@@ -59,10 +80,12 @@ async function initApp(){
       currentUser = session?.user || null;
       authLoading = false;
       isAdmin = await fetchIsAdmin(currentUser);
+      await refreshAnonStatus();
       renderAll();
     });
   }
   appInitialized = true;
+  await refreshAnonStatus();
   const shareMatch = window.location.pathname.match(/^\/share\/([0-9a-f-]{36})$/i);
   if (shareMatch) {
     await loadSharedRun(shareMatch[1]);
@@ -355,6 +378,7 @@ function classifyErrorType(message) {
   if (message === "network_failure")  return "network";
   if (message.includes("All API keys") || message.includes("capacity") || message.includes("unavailable") || message.includes("503")) return "capacity";
   if (message.includes("Too many requests") || message.includes("429") || message.includes("rate")) return "rate_limit";
+  if (message === "ANON_LIMIT_REACHED") return "anon_limit";
   if (message.includes("Sign in") || message.includes("Unauthorized")) return "auth";
   if (message.includes("free runs this month")) return "monthly_limit";
   if (message.includes("token limit") || message.includes("MAX_TOKENS")) return "token_limit";
@@ -390,7 +414,7 @@ function logErrorToDb(step, message) {
    API — calls this app's own server, which holds the real key. The
    browser never sees it and never talks to Google directly.
    ===================================================================== */
-async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model){
+async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, step){
   const genConfig = {
     responseMimeType: "application/json",
     responseSchema: responseSchema,
@@ -404,7 +428,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
   const timeoutMs = (maxOutputTokens || 1000) > 2000 ? clientGenerateTimeoutMs : clientQuickTimeoutMs;
   const controller = new AbortController();
   const timeoutId = setTimeout(function(){ controller.abort(); }, timeoutMs);
-  const headers = { "Content-Type":"application/json" };
+  const headers = { "Content-Type":"application/json", "X-Anon-Token": anonToken };
   if (sbClient){
     try {
       // Race token retrieval against a 5s fuse — if a refresh stalls we
@@ -426,6 +450,7 @@ async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTo
       signal: controller.signal,
       body: JSON.stringify({
         models: Array.isArray(model) ? model : [model || STRONG_MODEL],
+        _step: step || null,
         systemInstruction: { parts:[{ text: systemPrompt }] },
         contents: [{ parts:[{ text: userMessage }] }],
         generationConfig: genConfig
@@ -614,10 +639,14 @@ function handleStartClick(){
     return;
   }
   state.startError = null;
-  // When limits are active and user is not signed in, prompt them to sign in first.
+  // When limits are active and user is not signed in, check their anon quota.
   if (!unrestrictedMode && !currentUser){
-    openLogin();
-    return;
+    if (anonDailyLimit === 0 || (anonRemaining !== null && anonRemaining <= 0)){
+      state.screen = "gate";
+      state.gateReason = "anon_limit";
+      renderAll();
+      return;
+    }
   }
   runClassify();
 }
@@ -626,14 +655,23 @@ async function runClassify(){
   funnelSessionId = crypto.randomUUID();
   state.screen = "classifying"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODELS);
+    const { text, usage, modelUsed } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODELS, "classify");
     state.classification = parseJSON(text);
     logUsage("classify", modelUsed, usage);
+    // Decrement local anon counter so the start screen updates immediately.
+    if (!currentUser && anonRemaining !== null) anonRemaining = Math.max(0, anonRemaining - 1);
     state.screen = "classified";
     renderAll();
     const c = state.classification;
     fireFunnelEvent("classified", { category: c.primary_category, destination: state.destination, complexity: c.complexity });
   } catch(e){
+    if (e.message === "ANON_LIMIT_REACHED") {
+      state.screen = "gate";
+      state.gateReason = "anon_limit";
+      anonRemaining = 0;
+      renderAll();
+      return;
+    }
     logErrorToDb("classify", e.message);
     state.error = { step:"classify", message:e.message };
     renderAll();

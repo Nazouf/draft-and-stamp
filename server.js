@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v2.9.4";
+const APP_VERSION = "v2.9.5";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -47,6 +47,11 @@ let smallCritCap   = 3;  // hard budget pressure kicks in above this for small t
 let bigCritCap     = 5;  // hard budget pressure kicks in above this for big tasks
 let smallEnrichCap = 1;  // max enrichment questions for small tasks
 let bigEnrichCap   = 2;  // max enrichment questions for big tasks
+
+// Anonymous user daily prompt limit — tracked in-memory by IP and browser token.
+let anonDailyLimit = 2;
+const anonByIp    = new Map(); // ip    -> { count: number, date: string }
+const anonByToken = new Map(); // token -> { count: number, date: string }
 
 // Supabase admin client — uses service role key, never exposed to the browser.
 const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -108,6 +113,7 @@ function applySettingRow(key, value) {
   if (key === "big_crit_cap")            bigCritCap               = Math.max(1, parseInt(value) || 5);
   if (key === "small_enrich_cap")        smallEnrichCap           = Math.max(0, parseInt(value) || 1);
   if (key === "big_enrich_cap")          bigEnrichCap             = Math.max(0, parseInt(value) || 2);
+  if (key === "anon_daily_limit")        anonDailyLimit           = Math.max(0, parseInt(value) || 2);
   // Model enable/disable — key format: "model_enabled:gemini-3.1-flash-lite"
   if (key.startsWith("model_enabled:")) {
     const m = key.slice("model_enabled:".length);
@@ -133,6 +139,29 @@ async function loadKeyStats() {
 }
 
 function todayDate() { return new Date().toISOString().slice(0, 10); }
+
+function getAnonRemaining(ip, token) {
+  const today = todayDate();
+  const ipStat    = anonByIp.get(ip);
+  const tokenStat = token ? anonByToken.get(token) : null;
+  const ipCount    = (ipStat    && ipStat.date    === today) ? ipStat.count    : 0;
+  const tokenCount = (tokenStat && tokenStat.date === today) ? tokenStat.count : 0;
+  return Math.max(0, anonDailyLimit - Math.max(ipCount, tokenCount));
+}
+
+function consumeAnonSlot(ip, token) {
+  const today = todayDate();
+  const ipStat = anonByIp.get(ip) || { count: 0, date: today };
+  if (ipStat.date !== today) { ipStat.count = 0; ipStat.date = today; }
+  ipStat.count++;
+  anonByIp.set(ip, ipStat);
+  if (token) {
+    const tokenStat = anonByToken.get(token) || { count: 0, date: today };
+    if (tokenStat.date !== today) { tokenStat.count = 0; tokenStat.date = today; }
+    tokenStat.count++;
+    anonByToken.set(token, tokenStat);
+  }
+}
 
 function resetTodayIfNeeded(stat) {
   const today = todayDate();
@@ -340,8 +369,18 @@ app.get("/api/config", async (req, res) => {
     clientQuickTimeout: clientQuickTimeoutMs,
     clientGenerateTimeout: clientGenerateTimeoutMs,
     monthlyRunLimit,
-    smallCritCap, bigCritCap, smallEnrichCap, bigEnrichCap
+    smallCritCap, bigCritCap, smallEnrichCap, bigEnrichCap,
+    anonDailyLimit
   });
+});
+
+// ─── Anonymous status ──────────────────────────────────────────────────────────
+// Public — returns how many free prompts this visitor has left today.
+app.get("/api/anon-status", (req, res) => {
+  if (!supabaseAdmin) return res.json({ remaining: 999, limit: 999 });
+  const ip    = req.ip;
+  const token = req.query.token || null;
+  res.json({ remaining: getAnonRemaining(ip, token), limit: anonDailyLimit });
 });
 
 // ─── Gemini proxy ──────────────────────────────────────────────────────────────
@@ -359,26 +398,36 @@ app.post("/api/gemini", geminiLimiter, async (req, res) => {
     if (!unrestricted) {
       const user = await verifyUser(req);
       if (!user) {
-        return res.status(401).json({ error: { message: "Sign in to use Draft & Stamp." } });
-      }
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const { count } = await supabaseAdmin
-        .from("runs")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .gte("created_at", startOfMonth.toISOString());
-      if ((count || 0) >= monthlyRunLimit) {
-        return res.status(429).json({
-          error: { message: `You've used all ${monthlyRunLimit} free runs this month. Resets on the 1st.` }
-        });
+        // Anonymous path — check daily prompt limit at the classify step only.
+        if (req.body._step === "classify") {
+          const ip = req.ip;
+          const anonToken = req.headers["x-anon-token"] || null;
+          if (getAnonRemaining(ip, anonToken) <= 0) {
+            return res.status(429).json({ error: { message: "ANON_LIMIT_REACHED" } });
+          }
+          consumeAnonSlot(ip, anonToken);
+        }
+        // Non-classify steps pass through — they're part of an already-started session.
+      } else {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const { count } = await supabaseAdmin
+          .from("runs")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", startOfMonth.toISOString());
+        if ((count || 0) >= monthlyRunLimit) {
+          return res.status(429).json({
+            error: { message: `You've used all ${monthlyRunLimit} free runs this month. Resets on the 1st.` }
+          });
+        }
       }
     }
   }
 
   try {
-    const { models: requestedModels, model: requestedModel, ...geminiBody } = req.body;
+    const { models: requestedModels, model: requestedModel, _step: _reqStep, ...geminiBody } = req.body;
     // Accept either a models[] array (new) or legacy single model string
     let modelPool;
     if (Array.isArray(requestedModels) && requestedModels.length) {
@@ -651,6 +700,7 @@ app.get("/api/admin/app-settings", requireAdmin, (req, res) => {
     server_quick_timeout:    serverQuickTimeoutMs   / 1000,
     server_generate_timeout: serverGenerateTimeoutMs / 1000,
     monthly_run_limit:       monthlyRunLimit,
+    anon_daily_limit:        anonDailyLimit,
     small_crit_cap:          smallCritCap,
     big_crit_cap:            bigCritCap,
     small_enrich_cap:        smallEnrichCap,
