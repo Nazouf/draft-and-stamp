@@ -117,6 +117,25 @@ const TOPIC_SEEDS = {
     "specific risks or protections one party needs — payment protection, IP ownership clarity, confidentiality, exclusivity, warranties",
     "whether standard boilerplate clauses (force majeure, entire agreement, severability, notices) should be included or kept minimal",
   ],
+  creative_writing: [
+    "the genre or style — fantasy, sci-fi, literary fiction, romance, thriller, horror, comedy, surrealist, historical fiction — the AI defaults to a generic style without this",
+    "the narrative direction: what is this about, what should happen, what's the core conflict or central theme — this is the #1 thing users correct after the first draft",
+    "the tone and feel — dark and serious, light and whimsical, emotionally heavy, playful and funny, poetic and lyrical, gritty and realistic",
+    "characters involved — who are they, what are their relationships, specific traits or voices that need to come through",
+    "length and format — flash fiction, full short story, sonnet, free verse, screenplay scene, chapter excerpt",
+    "point of view — first person, third person limited, third person omniscient, second person",
+    "what NOT to include — topics, directions, tropes, tones, or elements to actively avoid",
+    "whether an existing piece of writing (the person's or a named author's) should influence the style",
+    "the intended audience — adult literary fiction readers, children, fans of a specific genre, a specific person",
+  ],
+  summarisation: [
+    "the desired output style — bullet points, structured paragraph, plain conversational language, academic register, executive summary format — tone is the most-corrected thing in summaries",
+    "how much to compress — preserve every key argument (tight summary), keep only the headline conclusion (steep reduction), or somewhere in between",
+    "what to preserve above all else — the core argument, the data and numbers, the narrative flow, the specific recommendations",
+    "the intended audience for the summary — someone who hasn't read the original, a domain expert, a general reader, a specific person",
+    "whether to simplify language or maintain the original register and terminology",
+    "a maximum length or format constraint — one paragraph, five bullet points, under 200 words",
+  ],
   other: [
     "what success looks like — what would a perfect output do or contain?",
     "who this is actually for — who will use or read the output?",
@@ -136,6 +155,8 @@ const STAGE_HINTS = {
   video: "For AI video generation prompts: always one stage — a single well-crafted scene prompt is the deliverable. For video scripts: short-form (under 3 minutes, TikTok, Reels, ads) is always one stage. Long-form (YouTube, podcast, explainer) may split into hook + body sections + CTA, but only if the request explicitly asks for a full script with structure — otherwise one stage.",
   agent_prompt: "Almost always one stage — a system prompt is a single coherent document. Only split if the agent needs a primary instruction block plus a separate reference section (e.g. a product FAQ or policy doc the agent should cite), and even then only if the user explicitly asked for both.",
   legal: "Simple agreements (NDAs, basic service agreements, simple letters of intent): one stage. Complex documents (full employment agreement, terms of service, privacy policy) may split into: core obligations and definitions; then boilerplate provisions (IP, liability, termination, governing law); then execution/signature block — but only if the request explicitly asks for a complete final document, not a draft for counsel review.",
+  creative_writing: "Almost always a single stage — a short story, poem, or creative piece is one unified output. Only split if the request is genuinely multi-part: a story with distinct chapters where each builds on the last, a screenplay with separate acts, a serialised piece. Never split just because the piece is long.",
+  summarisation: "Always a single stage — a summary is one output, never split.",
   other: "No fixed shape for this category — decide purely from what's genuinely separable in this specific request."
 };
 
@@ -145,7 +166,7 @@ const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 // Aliases used in a few legacy logUsage call sites before modelUsed is returned
 const FAST_MODEL   = FAST_MODELS[0];
 const STRONG_MODEL = STRONG_MODELS[0];
-const APP_VERSION  = "v3.9.28";
+const APP_VERSION  = "v3.9.29";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -155,7 +176,7 @@ const APP_VERSION  = "v3.9.28";
    tool call available here, so the contract has to live in the prompt).
    ===================================================================== */
 
-const CATEGORY_ENUM = ["writing","code","image","research","financial_model","presentation","video","agent_prompt","legal","other"];
+const CATEGORY_ENUM = ["writing","creative_writing","summarisation","code","image","research","financial_model","presentation","video","agent_prompt","legal","other"];
 
 const CLASSIFY_SCHEMA = {
   type:"object",

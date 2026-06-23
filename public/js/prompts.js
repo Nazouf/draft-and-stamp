@@ -11,7 +11,24 @@ any prompts, questions, or advice — only this classification.
 - writing: blog posts, social media captions, emails, newsletters, marketing copy,
   cover letters, formal letters, client proposals, product descriptions, general
   text of any kind. Use this for human-readable written content. NOT for legal
-  documents (use legal), video scripts (use video), or AI agent instructions (use agent_prompt).
+  documents (use legal), video scripts (use video), AI agent instructions (use
+  agent_prompt), fiction/stories/poems/roleplay (use creative_writing), or requests
+  where the user provides existing content to be condensed (use summarisation).
+
+- creative_writing: fiction, short stories, novels, poems, poetry, screenplays written
+  for creative purposes, roleplay scenarios, fan fiction, character creation,
+  world-building, song lyrics, narratives written for entertainment rather than
+  professional or functional use. The output is imaginative invented content, not
+  functional text. NOT for professional writing (use writing), video scripts for
+  human recording (use video), or condensing existing content (use summarisation).
+
+- summarisation: requests where the user provides existing content and wants it
+  condensed, simplified, or reformatted. The output is a shorter or restructured
+  version of something that already exists — not new analysis or new original text.
+  Examples: "summarize this article", "condense this report", "give me the key points
+  of this", "rewrite this in simpler language", "TL;DR this". NOT for generating new
+  analysis or research (use research), and NOT for rewriting into a new creative form
+  (use creative_writing).
 
 - code: programs, scripts, automations, Excel/Sheets formulas, SQL queries,
   regex patterns, CLI commands, API calls — anything meant to be executed or run
@@ -22,11 +39,12 @@ any prompts, questions, or advice — only this classification.
   Flux, Ideogram, Adobe Firefly, etc. For still images only. NOT for video generation
   (use video).
 
-- research: requests for information, summaries, explanations, analysis,
-  competitive analysis, literature reviews, fact-finding, strategic assessments,
-  SWOT analyses, data interpretation, how-to explanations. Also use this when the
-  user wants an AI to analyze a dataset, interpret results, or produce a written
-  report from data.
+- research: requests for information, explanations, analysis, competitive analysis,
+  literature reviews, fact-finding, strategic assessments, SWOT analyses, data
+  interpretation, how-to explanations. Also use this when the user wants an AI to
+  analyze a dataset, interpret results, or produce a written report from data. NOT
+  for condensing or reformatting content the user has already provided (use
+  summarisation).
 
 - financial_model: budgets, forecasts, financial projections, equity valuations,
   DCF analyses, investment analyses, business plans with numbers, ratio analyses,
@@ -564,6 +582,23 @@ is this purely about the achievement, the lessons or insights gained, a
 combination, or something else entirely? These three are all CRITICAL for
 professional social posts — the output will miss the mark without them.
 
+CREATIVE_WRITING (fiction, stories, poems, roleplay, screenplays): If not already
+stated — (1) the genre or style: fantasy, literary fiction, romance, horror,
+comedy, etc. — the AI defaults to a generic register without this; (2) the
+narrative direction: what is this about, what should happen, what's the core
+conflict or theme? — direction/angle is the #1 correction point for creative
+work, users consistently redirect because the AI took the story or poem in
+the wrong direction; (3) what to avoid — topics, tropes, tones, or directions
+to stay away from. Ask these before any length or format questions.
+
+SUMMARISATION (condensing or reformatting existing content the user provides):
+If not already stated — (1) the output style: should this read as bullet
+points, structured paragraph, plain language, academic register, or another
+specific format? Tone is the most-corrected thing in summaries — the AI
+defaults to a neutral register that frequently misses what the person wanted;
+(2) how much to compress: preserve every key argument (tight summary), keep
+only the main conclusion (steep reduction), or somewhere between?
+
 VIDEO (AI generation — Sora, Runway, Kling, Pika, Luma, Veo): If not already
 stated — (1) is this a prompt for an AI video generation tool or a script for
 a human to record? This determines everything else. (2) for generation: what
@@ -589,18 +624,22 @@ and what role does each play? Without identified parties the document cannot
 be drafted. Ask these before clause preferences or formatting questions.
 
 WRITING (all writing tasks — applies universally after any category-specific
-must-asks above are resolved): Tone and length are CRITICAL for every writing
-task, not enrichment. Without them, the AI picks a register and length the
+must-asks above are resolved): Tone, length, and direction are CRITICAL for
+every writing task, not enrichment. Without them, the AI picks defaults the
 person almost never intended. If not already answered:
 (1) Tone/voice — what should it feel like to read? (e.g. conversational and
     warm, formal and polished, direct and concise, casual and friendly) — ask
     this as a single_select with options suited to the specific task.
 (2) Length — how long should this be? (e.g. short and punchy, medium, detailed
     and comprehensive) — ask this as a single_select with realistic options.
+(3) Direction and constraints — what angle should this take, and is there
+    anything it should avoid? (e.g. "focus on X not Y", "don't make it about
+    relationships", "avoid a formal speech tone"). Ask this when the request
+    doesn't make the direction obvious. Skip if the angle is already clear.
 Exception: very simple informal writing (a quick casual message to a friend, a
 brief internal note, anything a person could write in under 2 minutes from
-memory) — skip both. The defaults are obvious and asking adds friction.
-Never ask tone or length if the request already made them clear.
+memory) — skip all three. The defaults are obvious and asking adds friction.
+Never ask any of these if the request already made them clear.
 
 Skip any must-ask if the original request already answered it clearly.
 </category_must_ask>
