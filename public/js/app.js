@@ -18,6 +18,8 @@ let smallEnrichCap = 1;
 let bigEnrichCap   = 2;
 let anonDailyLimit = 2;
 let anonRemaining  = null; // null = not yet fetched
+let anonAccepted   = !!localStorage.getItem('ds_anon_accepted'); // true = user chose "Continue as guest"
+let authGateContext = null; // "anon_limit" when modal opens due to limit hit
 
 // Persistent anonymous identity — one UUID per browser, lives in localStorage.
 const anonToken = (function() {
@@ -102,10 +104,18 @@ function refreshAuth(){
 
 function openLogin(){
   authMode = "signin"; authView = "choice"; authError = null; authSuccess = null; authLoading = false;
+  authGateContext = null;
+  document.getElementById("auth-overlay").style.display = "flex";
+  renderAuthModal();
+}
+function openLoginWithGate(reason){
+  authMode = "signin"; authView = "choice"; authError = null; authSuccess = null; authLoading = false;
+  authGateContext = reason;
   document.getElementById("auth-overlay").style.display = "flex";
   renderAuthModal();
 }
 function closeLogin(){
+  authGateContext = null;
   document.getElementById("auth-overlay").style.display = "none";
 }
 
@@ -642,9 +652,7 @@ function handleStartClick(){
   // When limits are active and user is not signed in, check their anon quota.
   if (!unrestrictedMode && !currentUser){
     if (anonDailyLimit === 0 || (anonRemaining !== null && anonRemaining <= 0)){
-      state.screen = "gate";
-      state.gateReason = "anon_limit";
-      renderAll();
+      openLoginWithGate("anon_limit");
       return;
     }
   }
@@ -666,10 +674,8 @@ async function runClassify(){
     fireFunnelEvent("classified", { category: c.primary_category, destination: state.destination, complexity: c.complexity });
   } catch(e){
     if (e.message === "ANON_LIMIT_REACHED") {
-      state.screen = "gate";
-      state.gateReason = "anon_limit";
       anonRemaining = 0;
-      renderAll();
+      openLoginWithGate("anon_limit");
       return;
     }
     logErrorToDb("classify", e.message);
@@ -1049,6 +1055,12 @@ document.getElementById("app").addEventListener("click", function(e){
     case "start-over": startOver(); break;
     case "refresh-to-update": window.location.reload(true); break;
     case "back-to-start": backToStart(); break;
+    case "continue-anon":
+      localStorage.setItem('ds_anon_accepted', '1');
+      anonAccepted = true;
+      closeLogin();
+      renderAll();
+      break;
     case "open-login": openLogin(); break;
     case "sign-out": signOut(); break;
     case "auth-google": signInWithGoogle(); break;

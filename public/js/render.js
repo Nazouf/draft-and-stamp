@@ -280,6 +280,10 @@ function renderTopbar(){
       '</div>';
     }
   }
+  if (!currentUser && anonAccepted) {
+    html += '<button class="topbar-btn" data-action="open-login">Sign in</button>';
+    html += '<span class="topbar-sep topbar-hide-mobile"></span>';
+  }
   html += '<button class="topbar-btn topbar-hide-mobile" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
   const el = document.getElementById("topbar-right");
   if (el.innerHTML !== html) el.innerHTML = html;
@@ -653,14 +657,31 @@ function renderErrorBanner(){
 
 function authChoiceHTML(includeClose){
   const googleSvg = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18L12.048 13.56c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>';
+
+  const isAnonLimitGate = authGateContext === "anon_limit";
+  const gateMsg = isAnonLimitGate
+    ? '<div class="auth-msg" style="background:rgba(217,120,92,0.1);border:1px solid rgba(217,120,92,0.35);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:0.875rem;color:var(--ink);">' +
+        'You&rsquo;ve used your ' + anonDailyLimit + ' free prompt' + (anonDailyLimit !== 1 ? 's' : '') + ' for today. Sign up free to keep going &mdash; resets tomorrow.' +
+      '</div>'
+    : '';
+
+  const canContinueAsGuest = !isAnonLimitGate && anonDailyLimit > 0 && (anonRemaining === null || anonRemaining > 0);
+  const remainingLabel = anonRemaining !== null ? anonRemaining : anonDailyLimit;
+  const guestBtn = canContinueAsGuest
+    ? '<div class="auth-divider"><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span><span>or</span><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span></div>' +
+      '<button class="btn" data-action="continue-anon" style="width:100%;color:var(--muted);">Continue as guest &mdash; ' + remainingLabel + ' free prompt' + (remainingLabel !== 1 ? 's' : '') + '</button>'
+    : '';
+
   return (includeClose ? '<button class="auth-close" id="auth-close-btn">&#x2715;</button>' : '') +
     '<h2 class="auth-title">Welcome</h2>' +
     '<p class="auth-sub">Free during beta — save your prompts across sessions.</p>' +
+    gateMsg +
     (authError ? '<div class="auth-msg auth-error">' + esc(authError) + '</div>' : '') +
     '<button class="auth-google-btn" data-action="auth-google">' + googleSvg + ' Continue with Google</button>' +
     '<div class="auth-divider"><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span><span>or</span><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span></div>' +
     '<button class="btn btn-primary" data-action="auth-choose-signin" style="width:100%;margin-bottom:10px;">Sign in with email</button>' +
-    '<button class="btn" data-action="auth-choose-signup" style="width:100%;">Create account</button>';
+    '<button class="btn" data-action="auth-choose-signup" style="width:100%;">Create account</button>' +
+    guestBtn;
 }
 
 function authFormHTML(isSignUp, includeClose){
@@ -825,7 +846,7 @@ function renderAll(){
     return;
   }
 
-  if (!currentUser){
+  if (!currentUser && !anonAccepted){
     body = renderAuthScreen();
     app.innerHTML = body;
     if (authView === "choice") wireAuthChoice();
