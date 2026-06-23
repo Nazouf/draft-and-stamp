@@ -201,11 +201,13 @@ function renderHistory(){
     perplexity:"Perplexity",deepseek:"DeepSeek",copilot:"Copilot",
     midjourney:"Midjourney",general:"General"
   };
-  let html = '<div class="history-header">' +
-    '<h2 class="history-title">My Prompts</h2>' +
-    '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + (historySearch.trim() ? " matching &ldquo;" + esc(historySearch.trim()) + "&rdquo;" : " saved") : "Your saved prompts appear here") + '</p>' +
+  let html = '<div class="history-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">' +
+    '<div>' +
+      '<h2 class="history-title">My Prompts</h2>' +
+      '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + (historySearch.trim() ? " matching &ldquo;" + esc(historySearch.trim()) + "&rdquo;" : " saved") : "Your saved prompts appear here") + '</p>' +
+    '</div>' +
+    '<button class="btn" data-action="start-over" style="flex-shrink:0;">Start a new prompt</button>' +
   '</div>' +
-  '<div class="btn-row"><button class="btn" data-action="start-over">Start a new prompt</button></div>' +
   '<input type="search" class="history-search" placeholder="Search prompts…" value="' + esc(historySearch) + '" oninput="onHistorySearch(this.value)">';
 
   const visibleRuns = historyRuns.filter(r => !hiddenRunIds.has(r.id));
