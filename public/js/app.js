@@ -840,14 +840,15 @@ function submitAnswer(answerLabel){
   runSelectQuestion();
 }
 
-// Capture any text typed into batch free-text fields into state before a
-// re-render (triggered by selecting an option in another question) wipes them.
+// Capture any text typed into batch free-text and "write your own" fields into
+// state before a re-render (triggered by selecting an option in another
+// question) wipes them.
 function syncBatchFreeText(){
   (state.currentBatch || []).forEach(q => {
-    if (q.input_type === "free_text"){
-      const el = document.getElementById("batch-text-" + q.id);
-      if (el) state.batchAnswers[q.id] = el.value;
-    }
+    const textEl = document.getElementById("batch-text-" + q.id);
+    if (textEl) state.batchAnswers[q.id] = textEl.value;
+    const customEl = document.getElementById("batch-custom-" + q.id);
+    if (customEl) state.batchAnswers["custom:" + q.id] = customEl.value;
   });
 }
 
@@ -863,11 +864,18 @@ function submitBatch(){
     if (q.input_type === "free_text"){
       const el = document.getElementById("batch-text-" + q.id);
       answer = el ? el.value.trim() : "";
-    } else if (q.input_type === "multi_select"){
-      const sel = state.batchAnswers[q.id];
-      answer = Array.isArray(sel) ? sel.join(", ") : "";
     } else {
-      answer = state.batchAnswers[q.id] || "";
+      // A typed "write your own" answer overrides any selected option(s).
+      const customEl = document.getElementById("batch-custom-" + q.id);
+      const custom = customEl ? customEl.value.trim() : "";
+      if (custom){
+        answer = custom;
+      } else if (q.input_type === "multi_select"){
+        const sel = state.batchAnswers[q.id];
+        answer = Array.isArray(sel) ? sel.join(", ") : "";
+      } else {
+        answer = state.batchAnswers[q.id] || "";
+      }
     }
     if (!answer) answer = "[No preference — use your best judgment]";
     state.qaHistory.push({ id:q.id, text:q.text, input_type:q.input_type,

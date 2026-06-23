@@ -511,6 +511,13 @@ function renderOptionInput(q){
     '<button class="custom-toggle ai-decide-btn" data-action="ai-decides">✦ Let AI choose the best approach for me</button>';
 }
 
+function renderBatchCustomField(q){
+  const ba = state.batchAnswers || {};
+  const cv = ba["custom:" + q.id] != null ? ba["custom:" + q.id] : "";
+  return '<input type="text" id="batch-custom-' + esc(q.id) + '" class="batch-custom" ' +
+    'placeholder="Or write your own answer…" value="' + esc(cv) + '">';
+}
+
 function renderBatchQuestion(q){
   const ba = state.batchAnswers || {};
   let input = '';
@@ -526,7 +533,8 @@ function renderBatchQuestion(q){
         '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
         '<span class="option-label">' + esc(o.label) + '</span>' +
       '</div>';
-    }).join("") + '</div>';
+    }).join("") + '</div>' +
+    renderBatchCustomField(q);
   } else {
     // single_select (and any unexpected type) — radio-style check rows
     const opts = q.options || [];
@@ -542,6 +550,7 @@ function renderBatchQuestion(q){
           (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
         '</div>';
       }).join("") + '</div>' +
+      renderBatchCustomField(q) +
       '<button class="custom-toggle ai-decide-btn" data-action="batch-ai-decides" data-qid="' + esc(q.id) + '">✦ Let AI choose this one</button>';
     }
   }

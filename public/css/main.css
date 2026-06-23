@@ -349,6 +349,13 @@
   .batch-q{padding:14px 16px;border:1px solid var(--paper-line);border-radius:8px;background:var(--paper-soft);}
   .batch-q .question-hint{margin-bottom:10px;}
   .batch-q .free-text-input{min-height:64px;}
+  .batch-custom{
+    width:100%;margin-top:10px;padding:8px 10px;font-family:inherit;font-size:0.9rem;
+    border:1.5px solid var(--paper-line);border-radius:6px;background:var(--paper);
+    color:var(--text);box-sizing:border-box;
+  }
+  .batch-custom:focus{outline:none;border-color:var(--accent);}
+  .batch-custom::placeholder{color:var(--muted);}
   .option-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
   .option-btn{
     text-align:left;border:1.5px solid var(--paper-line);background:var(--paper-soft);
