@@ -609,7 +609,7 @@ async function loadFeedback() {
       <td>${f.rating != null ? f.rating + " / 10" : '<span style="color:var(--text-dim);">—</span>'}</td>
       <td>${f.results_rating != null ? f.results_rating + " / 10" : '<span style="color:var(--text-dim);">—</span>'}</td>
       <td>${f.comment ? esc(f.comment) : '<span style="color:var(--text-dim);">—</span>'}</td>
-      <td><button class="expand-btn" onclick="openRunModal('${f.run_id}')">View run</button></td>
+      <td>${f.run_id ? `<button class="expand-btn" onclick="openRunModal('${f.run_id}')">View run</button>` : '<span style="color:var(--text-dim);font-size:0.8rem;">General</span>'}</td>
       <td class="mono">${new Date(f.created_at).toLocaleString()}</td>
     </tr>`;
   });
