@@ -920,6 +920,10 @@ setTimeout(checkForUpdate, 3000);
 setInterval(checkForUpdate, 5 * 60 * 1000);
 
 function startOver(){
+  if (!currentUser && anonDailyLimit > 0 && anonRemaining !== null && anonRemaining <= 0){
+    openLoginWithGate("anon_limit");
+    return;
+  }
   clearTimeout(state._stampTimer);
   clearInterval(state._typeInterval);
   clearInterval(questionTimerInterval); questionTimerInterval = null;
@@ -934,6 +938,10 @@ function startOver(){
 // by handleStartClick before the gate fired, so there's no reason to throw
 // it away just because they're sent back to the start screen.
 function backToStart(){
+  if (!currentUser && anonDailyLimit > 0 && anonRemaining !== null && anonRemaining <= 0){
+    openLoginWithGate("anon_limit");
+    return;
+  }
   clearTimeout(state._stampTimer);
   state.screen = "start";
   state.gateReason = null;
