@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v3.9.20";
+const APP_VERSION = "v3.9.21";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -467,6 +467,7 @@ app.get("/api/runs", async (req, res) => {
       .from("runs")
       .select("id, created_at, request, destination, category, complexity, generated_prompts", { count: "exact" })
       .eq("user_id", user.id)
+      .not("generated_prompts", "is", null)
       .order("created_at", { ascending: false });
     if (search) q = q.ilike("request", "%" + search + "%");
     const { data, count, error } = await q.range(page * limit, (page + 1) * limit - 1);
