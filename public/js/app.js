@@ -1069,6 +1069,7 @@ document.getElementById("app").addEventListener("click", function(e){
     case "continue-after-staging": runGenerate(); break;
     case "retry": retryLastStep(); break;
     case "start-over": startOver(); break;
+    case "history-back": state.screen = "start"; renderAll(); break;
     case "refresh-to-update": window.location.reload(true); break;
     case "back-to-start": backToStart(); break;
     case "continue-anon":

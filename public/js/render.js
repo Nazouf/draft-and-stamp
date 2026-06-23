@@ -206,7 +206,7 @@ function renderHistory(){
       '<h2 class="history-title">My Prompts</h2>' +
       '<p class="history-sub">' + (historyTotal ? historyTotal + " run" + (historyTotal !== 1 ? "s" : "") + (historySearch.trim() ? " matching &ldquo;" + esc(historySearch.trim()) + "&rdquo;" : " saved") : "Your saved prompts appear here") + '</p>' +
     '</div>' +
-    '<button class="btn" data-action="start-over" style="flex-shrink:0;">Start a new prompt</button>' +
+    '<button class="btn" data-action="history-back" style="flex-shrink:0;">← Back</button>' +
   '</div>' +
   '<input type="search" class="history-search" placeholder="Search prompts…" value="' + esc(historySearch) + '" oninput="onHistorySearch(this.value)">';
 
