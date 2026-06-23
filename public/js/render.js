@@ -307,7 +307,7 @@ function renderStart(){
       '</div>'
     : '';
 
-  const anonBanner = (!currentUser && !unrestrictedMode && anonDailyLimit > 0 && anonRemaining !== null)
+  const anonBanner = (!currentUser && anonDailyLimit > 0 && anonRemaining !== null)
     ? '<div class="anon-banner">' +
         (anonRemaining > 0
           ? '<span>' + anonRemaining + ' free prompt' + (anonRemaining !== 1 ? 's' : '') + ' left today</span>' +

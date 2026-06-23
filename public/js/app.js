@@ -45,7 +45,7 @@ async function fetchIsAdmin(user){
 }
 
 async function refreshAnonStatus(){
-  if (currentUser || unrestrictedMode) { anonRemaining = null; return; }
+  if (currentUser) { anonRemaining = null; return; }
   try {
     const res = await fetch("/api/anon-status?token=" + encodeURIComponent(anonToken));
     const data = await res.json();
@@ -650,12 +650,10 @@ function handleStartClick(){
     return;
   }
   state.startError = null;
-  // When limits are active and user is not signed in, check their anon quota.
-  if (!unrestrictedMode && !currentUser){
-    if (anonDailyLimit === 0 || (anonRemaining !== null && anonRemaining <= 0)){
-      openLoginWithGate("anon_limit");
-      return;
-    }
+  // Block anonymous users who have hit the daily limit (regardless of unrestricted mode).
+  if (!currentUser && anonDailyLimit > 0 && anonRemaining !== null && anonRemaining <= 0){
+    openLoginWithGate("anon_limit");
+    return;
   }
   runClassify();
 }

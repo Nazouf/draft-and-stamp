@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v2.9.7";
+const APP_VERSION = "v2.9.8";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -392,36 +392,35 @@ app.post("/api/gemini", geminiLimiter, async (req, res) => {
   // Allow unauthenticated calls from localhost (test runner)
   const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
 
-  // Enforce limits only when Supabase is connected and unrestricted mode is off.
+  // Anon daily limit always applies; monthly run limit only applies when unrestricted mode is off.
   if (supabaseAdmin && !isLocalhost) {
     const unrestricted = await getUnrestrictedMode();
-    if (!unrestricted) {
-      const user = await verifyUser(req);
-      if (!user) {
-        // Anonymous path — check daily prompt limit at the classify step only.
-        if (req.body._step === "classify") {
-          const ip = req.ip;
-          const anonToken = req.headers["x-anon-token"] || null;
-          if (getAnonRemaining(ip, anonToken) <= 0) {
-            return res.status(429).json({ error: { message: "ANON_LIMIT_REACHED" } });
-          }
-          consumeAnonSlot(ip, anonToken);
+    const user = await verifyUser(req);
+
+    if (!user) {
+      // Anonymous — enforce daily limit regardless of unrestricted mode.
+      if (anonDailyLimit > 0 && req.body._step === "classify") {
+        const ip = req.ip;
+        const anonToken = req.headers["x-anon-token"] || null;
+        if (getAnonRemaining(ip, anonToken) <= 0) {
+          return res.status(429).json({ error: { message: "ANON_LIMIT_REACHED" } });
         }
-        // Non-classify steps pass through — they're part of an already-started session.
-      } else {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const { count } = await supabaseAdmin
-          .from("runs")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .gte("created_at", startOfMonth.toISOString());
-        if ((count || 0) >= monthlyRunLimit) {
-          return res.status(429).json({
-            error: { message: `You've used all ${monthlyRunLimit} free runs this month. Resets on the 1st.` }
-          });
-        }
+        consumeAnonSlot(ip, anonToken);
+      }
+    } else if (!unrestricted) {
+      // Logged-in user with limits active — enforce monthly run limit.
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const { count } = await supabaseAdmin
+        .from("runs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", startOfMonth.toISOString());
+      if ((count || 0) >= monthlyRunLimit) {
+        return res.status(429).json({
+          error: { message: `You've used all ${monthlyRunLimit} free runs this month. Resets on the 1st.` }
+        });
       }
     }
   }
