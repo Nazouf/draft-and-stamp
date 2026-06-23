@@ -17,6 +17,7 @@ const TOPIC_SEEDS = {
     "for cover letters and job applications specifically: real certifications, courses, or credentials the applicant holds; specific named companies or projects they have worked on; concrete achievements or results from those experiences; and what specifically draws them to this company or role — without these the output is a generic template",
     "for marketing copy or ads: the single most important message or claim; what action the reader should take; and where this will appear (website hero, email subject line, paid ad, product packaging, social caption)",
     "for social media: which platform — LinkedIn, Instagram, X/Twitter, TikTok — each has a very different optimal length, tone, and structure",
+    "for LinkedIn posts and professional announcements: the narrative angle — specific skills and takeaways only, a holistic overview of the experience, lessons learned, or a mix; what NOT to include or what direction to avoid (e.g. don't focus on relationships, avoid buzzwords, don't make it certificate-focused); desired length — short and punchy or longer storytelling; whether to include hashtags and tag organisations",
     "the real names of any people, companies, or titles involved — or whether to use placeholders",
     "who will read it and what relationship the writer has with them — close colleague, hiring manager, a company they've never contacted, a recruiter, etc.",
     "the feel or voice — formal and polished, warm and conversational, direct and brief, friendly but professional, or something in between",
@@ -144,7 +145,7 @@ const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 // Aliases used in a few legacy logUsage call sites before modelUsed is returned
 const FAST_MODEL   = FAST_MODELS[0];
 const STRONG_MODEL = STRONG_MODELS[0];
-const APP_VERSION  = "v3.9.26";
+const APP_VERSION  = "v3.9.27";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 

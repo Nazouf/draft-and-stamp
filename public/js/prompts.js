@@ -112,8 +112,16 @@ any prompts, questions, or advice — only this classification.
      real professional consequences — but does not cross into regulated territory
    - The person's professional reputation depends on the output being accurate
      and well-structured
+   - Public-facing professional social media posts (LinkedIn announcements,
+     career milestone posts, thought leadership pieces, achievement posts) —
+     these go to an external professional audience where the person's reputation
+     is visible and at stake. A LinkedIn post about a certification, program
+     completion, job change, or professional insight is "professional", even
+     though the platform is social media. Casual tweets, personal updates, and
+     non-professional social posts remain "routine".
    Examples: investment reports that don't give personal advice, pitch decks,
-   client briefings, board reports, proposals to external parties.
+   client briefings, board reports, proposals to external parties, LinkedIn
+   achievement and milestone posts.
 
    Set to "routine" otherwise — personal tasks, internal drafts, creative work,
    purely exploratory tasks with no external audience or professional consequence.
@@ -542,6 +550,19 @@ name (to sign the output — without this the letter ends with a placeholder);
 the role or topic — without these the output invents bracket placeholders;
 (3) specific achievements or results from their background that should be
 highlighted. Ask these before any tone, length, or style questions.
+
+WRITING (LinkedIn posts, professional social media announcements, career
+milestone posts, thought leadership pieces): If not already stated —
+(1) the voice and tone they want: conversational and human, formal and
+polished, or somewhere between — without this the AI defaults to hollow
+corporate language regardless of every other instruction, and the user will
+have to ask for rewrites; (2) what they want to avoid or what direction is
+off-limits — users have strong opinions here that the AI cannot guess from
+the topic alone (e.g. "don't make it about relationships", "avoid corporate
+buzzwords", "don't focus only on the certificate"); (3) the narrative angle:
+is this purely about the achievement, the lessons or insights gained, a
+combination, or something else entirely? These three are all CRITICAL for
+professional social posts — the output will miss the mark without them.
 
 VIDEO (AI generation — Sora, Runway, Kling, Pika, Luma, Veo): If not already
 stated — (1) is this a prompt for an AI video generation tool or a script for
