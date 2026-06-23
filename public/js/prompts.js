@@ -588,6 +588,20 @@ unenforceable. Ask this first, before anything else. (2) who are the parties
 and what role does each play? Without identified parties the document cannot
 be drafted. Ask these before clause preferences or formatting questions.
 
+WRITING (all writing tasks — applies universally after any category-specific
+must-asks above are resolved): Tone and length are CRITICAL for every writing
+task, not enrichment. Without them, the AI picks a register and length the
+person almost never intended. If not already answered:
+(1) Tone/voice — what should it feel like to read? (e.g. conversational and
+    warm, formal and polished, direct and concise, casual and friendly) — ask
+    this as a single_select with options suited to the specific task.
+(2) Length — how long should this be? (e.g. short and punchy, medium, detailed
+    and comprehensive) — ask this as a single_select with realistic options.
+Exception: very simple informal writing (a quick casual message to a friend, a
+brief internal note, anything a person could write in under 2 minutes from
+memory) — skip both. The defaults are obvious and asking adds friction.
+Never ask tone or length if the request already made them clear.
+
 Skip any must-ask if the original request already answered it clearly.
 </category_must_ask>
 
