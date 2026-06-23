@@ -425,15 +425,14 @@ function logErrorToDb(step, message) {
    API — calls this app's own server, which holds the real key. The
    browser never sees it and never talks to Google directly.
    ===================================================================== */
-async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, enableThinking, model, step){
+// thinkingBudget: 0 = thinking off, >0 = token cap for internal reasoning.
+async function callGemini(systemPrompt, userMessage, responseSchema, maxOutputTokens, thinkingBudget, model, step){
   const genConfig = {
     responseMimeType: "application/json",
     responseSchema: responseSchema,
-    maxOutputTokens: maxOutputTokens || 1000
+    maxOutputTokens: maxOutputTokens || 1000,
+    thinkingConfig: { thinkingBudget: thinkingBudget || 0 }
   };
-  if (enableThinking === false){
-    genConfig.thinkingConfig = { thinkingBudget: 0 };
-  }
   // AbortController is set up FIRST — before any async work — so even a
   // slow Supabase token refresh is bounded by the overall timeout budget.
   const timeoutMs = (maxOutputTokens || 1000) > 2000 ? clientGenerateTimeoutMs : clientQuickTimeoutMs;
@@ -662,7 +661,7 @@ async function runClassify(){
   funnelSessionId = crypto.randomUUID();
   state.screen = "classifying"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, false, FAST_MODELS, "classify");
+    const { text, usage, modelUsed } = await callGemini(CLASSIFY_SYSTEM, buildClassifyMsg(), CLASSIFY_SCHEMA, 500, 0, FAST_MODELS, "classify");
     state.classification = parseJSON(text);
     logUsage("classify", modelUsed, usage);
     // Decrement local anon counter so the start screen updates immediately.
@@ -700,7 +699,7 @@ function afterConsiderations(){
 async function runConsiderations(){
   state.screen = "considerations_loading"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed } = await callGemini(CONSIDERATIONS_SYSTEM, buildConsiderationsMsg(), CONSIDERATIONS_SCHEMA, 800, false, FAST_MODELS);
+    const { text, usage, modelUsed } = await callGemini(CONSIDERATIONS_SYSTEM, buildConsiderationsMsg(), CONSIDERATIONS_SCHEMA, 800, 0, FAST_MODELS);
     const json = parseJSON(text);
     logUsage("considerations", modelUsed, usage);
     state.requiredTopics = (json.required_topics || []).map(t => ({id:t.id, label:t.label, reason:t.reason, dismissed:false, covered:false}));
@@ -754,7 +753,7 @@ async function runSelectQuestion(forceTopic){
   }, 1000);
   state.screen = "loading_question"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed: sqModel } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, false, FAST_MODELS);
+    const { text, usage, modelUsed: sqModel } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, 0, FAST_MODELS);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);
     const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
@@ -826,7 +825,7 @@ function confirmGenerate(){
 async function runStagePlanner(){
   state.screen = "staging_loading"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, false, FAST_MODELS);
+    const { text, usage, modelUsed } = await callGemini(STAGE_PLANNER_SYSTEM, buildStagePlannerMsg(), STAGE_PLANNER_SCHEMA, 800, 0, FAST_MODELS);
     const rawPlan = parseJSON(text);
     if (rawPlan && rawPlan.stages) rawPlan.stages = rawPlan.stages.slice(0, 4);
     state.stagePlan = rawPlan;
@@ -850,7 +849,13 @@ async function runGenerate(){
   }, 1000);
   state.screen = "generating_loading"; state.error = null; renderAll();
   try{
-    const { text, usage, modelUsed } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, true, STRONG_MODELS);
+    const c = state.classification || {};
+    const isSmall = c.complexity === "small";
+    const heavyCats = ["code","financial_model","legal","agent_prompt"];
+    const isHeavy   = !isSmall && heavyCats.includes(c.primary_category);
+    const genModelPool     = isSmall ? FAST_MODELS : STRONG_MODELS;
+    const genThinkBudget   = isSmall ? 0 : (isHeavy ? 5120 : 1024);
+    const { text, usage, modelUsed } = await callGemini(GENERATE_SYSTEM, buildGenerateMsg(), GENERATE_SCHEMA, 8000, genThinkBudget, genModelPool);
     const json = parseJSON(text);
     state.finalResult = {
       assumptions: Array.isArray(json.assumptions) ? json.assumptions : [],
