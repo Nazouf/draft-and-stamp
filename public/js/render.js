@@ -280,8 +280,6 @@ function renderTopbar(){
         '<div class="topbar-menu-email">' + esc(currentUser.email) + '</div>' +
         '<button class="topbar-menu-item" data-action="open-feedback">Feedback</button>' +
         '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
-        '<button class="topbar-menu-item" data-action="start-over">↩ Start over</button>' +
-        '<button class="topbar-menu-item topbar-menu-signout" data-action="sign-out">Sign out</button>' +
       '</div>';
     }
   }
