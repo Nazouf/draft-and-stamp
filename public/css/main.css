@@ -533,6 +533,13 @@
     cursor:pointer;transition:all .12s ease;font-family:inherit;
   }
   .auth-google-btn:hover{border-color:var(--ink);background:#fff;}
+  .auth-google-note{
+    font-size:0.72rem;color:var(--muted);text-align:center;
+    margin:6px 0 0;line-height:1.4;opacity:0.8;
+  }
+  @media(max-width:600px){
+    .auth-google-note{font-size:0.68rem;}
+  }
   .auth-divider{
     display:flex;align-items:center;gap:12px;margin:18px 0;
     color:var(--muted);font-size:0.82rem;

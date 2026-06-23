@@ -711,6 +711,7 @@ function authChoiceHTML(includeClose){
       '<p class="upsell-reset">Or wait until tomorrow — your free prompt resets daily.</p>' +
       (authError ? '<div class="auth-msg auth-error">' + esc(authError) + '</div>' : '') +
       '<button class="auth-google-btn" data-action="auth-google">' + googleSvg + ' Continue with Google</button>' +
+      '<p class="auth-google-note">The sign-in screen may show an unfamiliar URL — this is expected and secure.</p>' +
       '<div class="auth-divider"><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span><span>or</span><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span></div>' +
       '<button class="btn btn-primary" data-action="auth-choose-signin" style="width:100%;margin-bottom:10px;">Sign in with email</button>' +
       '<button class="btn" data-action="auth-choose-signup" style="width:100%;">Create a free account</button>';
@@ -728,6 +729,7 @@ function authChoiceHTML(includeClose){
     '<p class="auth-sub">Free during beta — save your prompts across sessions.</p>' +
     (authError ? '<div class="auth-msg auth-error">' + esc(authError) + '</div>' : '') +
     '<button class="auth-google-btn" data-action="auth-google">' + googleSvg + ' Continue with Google</button>' +
+    '<p class="auth-google-note">The sign-in screen may show an unfamiliar URL — this is expected and secure.</p>' +
     '<div class="auth-divider"><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span><span>or</span><span style="flex:1;height:1px;background:var(--paper-line);display:block;"></span></div>' +
     '<button class="btn btn-primary" data-action="auth-choose-signin" style="width:100%;margin-bottom:10px;">Sign in with email</button>' +
     '<button class="btn" data-action="auth-choose-signup" style="width:100%;">Create account</button>' +
