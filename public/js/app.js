@@ -230,7 +230,7 @@ async function saveRun(){
       // qa_pairs already kept up-to-date by saveProgressToDb — just add the result
       await sbClient.from("runs").update({
         qa_pairs: state.qaHistory,
-        generated_prompts: state.finalResult.prompts,
+        generated_prompts: state.finalResult,
         model_usage: state.usageEvents
       }).eq("id", currentRunId);
       return currentRunId;
@@ -246,7 +246,7 @@ async function saveRun(){
       output_format: c?.output_format || null,
       mode:          state.mode,
       qa_pairs:      state.qaHistory,
-      generated_prompts: state.finalResult.prompts,
+      generated_prompts: state.finalResult,
       model_usage:   state.usageEvents
     }).select("id").single();
     if (error){ console.error("saveRun:", error.message); return null; }

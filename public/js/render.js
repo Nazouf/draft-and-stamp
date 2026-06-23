@@ -90,7 +90,8 @@ function renderSharedResult(){
       '</div>';
   }
   const run = sharedRun;
-  const prompts = (run.generated_prompts && run.generated_prompts.prompts) || [];
+  const gp = run.generated_prompts;
+  const prompts = Array.isArray(gp) ? gp : (gp && gp.prompts) || [];
   const multi = prompts.length > 1;
   const destLabel = {claude:"Claude",chatgpt:"ChatGPT",gemini:"Gemini",grok:"Grok",perplexity:"Perplexity",deepseek:"DeepSeek",copilot:"Copilot",midjourney:"Midjourney",general:"General"}[run.destination] || run.destination || "";
   const catLabel = (run.category || "").replace(/_/g," ");
@@ -222,7 +223,8 @@ function renderHistory(){
     const dest = run.destination || "general";
     const destLabel = destLabels[dest] || dest;
     const category = (run.category || "").replace(/_/g," ");
-    const prompts = (run.generated_prompts && run.generated_prompts.prompts) ? run.generated_prompts.prompts : [];
+    const gp = run.generated_prompts;
+    const prompts = Array.isArray(gp) ? gp : (gp && gp.prompts) || [];
     const promptCount = prompts.length;
 
     html += '<div class="history-card">' +
