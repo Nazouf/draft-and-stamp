@@ -265,8 +265,6 @@ function renderTopbar(){
   let html = '';
   if (currentUser){
     if (unrestrictedMode) html += '<span class="chip topbar-hide-mobile">Beta &middot; unlimited</span>';
-    html += '<span class="chip topbar-hide-mobile">' + esc(currentUser.email) + '</span>';
-    html += '<span class="topbar-sep topbar-hide-mobile"></span>';
     html += '<button class="topbar-btn" data-action="show-history">My prompts</button>';
     if (isAdmin) html += '<a href="/admin" class="btn btn-primary" style="padding:5px 13px;font-size:0.8rem;text-decoration:none;">Admin</a>';
     html += '<span class="topbar-sep topbar-hide-mobile"></span>';
