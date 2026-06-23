@@ -8,6 +8,9 @@ let sbClient = null;
 let currentUser = null;
 let isAdmin = false;
 let topbarMenuOpen = false;
+let feedbackModalOpen = false;
+let generalFeedbackText = "";
+let feedbackSent = false;
 let appInitialized = false; // true once initApp() finishes (hides loading flash)
 let unrestrictedMode = true;
 let clientQuickTimeoutMs   = 25000;
@@ -1157,6 +1160,7 @@ document.getElementById("topbar-right").addEventListener("click", function(e){
   else if (action === "sign-out") signOut();
   else if (action === "show-history") loadHistory(0);
   else if (action === "toggle-dark") toggleDarkMode();
+  else if (action === "open-feedback") { feedbackModalOpen = true; feedbackSent = false; generalFeedbackText = ""; renderFeedbackModal(); }
 });
 
 document.addEventListener("click", function(e){
@@ -1197,8 +1201,17 @@ document.getElementById("auth-overlay").addEventListener("click", function(e){
 });
 window.addEventListener("online",  function(){ renderAll(); });
 window.addEventListener("offline", function(){ renderAll(); });
+document.getElementById("feedback-overlay").addEventListener("click", function(e){
+  if (e.target === this){ feedbackModalOpen = false; renderFeedbackModal(); return; }
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === "close-feedback"){ feedbackModalOpen = false; renderFeedbackModal(); }
+  else if (action === "submit-general-feedback") submitGeneralFeedback();
+});
+
 document.addEventListener("keydown", function(e){
-  if (e.key === "Escape") closeLogin();
+  if (e.key === "Escape"){ closeLogin(); feedbackModalOpen = false; renderFeedbackModal(); }
 });
 
 initApp();

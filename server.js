@@ -24,7 +24,7 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v2.9.13";
+const APP_VERSION = "v2.9.14";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -439,6 +439,19 @@ app.post("/api/gemini", geminiLimiter, async (req, res) => {
     res.status(status).json(modelUsed ? { ...data, _modelUsed: modelUsed } : data);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// ─── General feedback (any user, including anon) ───────────────────────────────
+app.post("/api/general-feedback", async (req, res) => {
+  const { comment } = req.body || {};
+  if (!comment || !comment.trim()) return res.status(400).json({ error: "No comment" });
+  const user = await verifyUser(req).catch(() => null);
+  try {
+    await supabaseAdmin.from("feedback").insert({ user_id: user?.id ?? null, comment: comment.trim() });
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

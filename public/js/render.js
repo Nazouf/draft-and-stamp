@@ -272,11 +272,13 @@ function renderTopbar(){
     html += '<span class="topbar-sep topbar-hide-mobile"></span>';
     html += '<button class="topbar-btn topbar-hide-mobile" data-action="sign-out">Sign out</button>';
     html += '<button class="topbar-btn topbar-hide-mobile" data-action="start-over">Start over</button>';
+    html += '<button class="topbar-btn topbar-hide-mobile" data-action="open-feedback">Feedback</button>';
     html += '<span class="topbar-sep topbar-hide-mobile"></span>';
     html += '<button class="topbar-btn topbar-more-btn" data-action="topbar-more" aria-label="More options">&#8942;</button>';
     if (topbarMenuOpen) {
       html += '<div class="topbar-more-menu">' +
         '<div class="topbar-menu-email">' + esc(currentUser.email) + '</div>' +
+        '<button class="topbar-menu-item" data-action="open-feedback">Feedback</button>' +
         '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
         '<button class="topbar-menu-item" data-action="start-over">↩ Start over</button>' +
         '<button class="topbar-menu-item topbar-menu-signout" data-action="sign-out">Sign out</button>' +
@@ -285,11 +287,37 @@ function renderTopbar(){
   }
   if (!currentUser && anonAccepted) {
     html += '<button class="topbar-btn" data-action="open-login">Sign in</button>';
+    html += '<button class="topbar-btn topbar-hide-mobile" data-action="open-feedback">Feedback</button>';
     html += '<span class="topbar-sep topbar-hide-mobile"></span>';
+    html += '<button class="topbar-btn topbar-more-btn" data-action="topbar-more" aria-label="More options">&#8942;</button>';
+    if (topbarMenuOpen) {
+      html += '<div class="topbar-more-menu">' +
+        '<button class="topbar-menu-item" data-action="open-feedback">Feedback</button>' +
+        '<button class="topbar-menu-item" data-action="toggle-dark">' + (darkMode ? '☀ Light mode' : '☾ Dark mode') + '</button>' +
+        '<button class="topbar-menu-item" data-action="open-login">Sign in</button>' +
+      '</div>';
+    }
   }
-  html += '<button class="topbar-btn topbar-hide-mobile" data-action="toggle-dark">' + (darkMode ? 'Light' : 'Dark') + '</button>';
   const el = document.getElementById("topbar-right");
   if (el.innerHTML !== html) el.innerHTML = html;
+}
+
+function renderFeedbackModal(){
+  const el = document.getElementById("feedback-overlay");
+  if (!el) return;
+  if (!feedbackModalOpen){ el.style.display = "none"; return; }
+  el.style.display = "flex";
+  document.getElementById("feedback-modal-box").innerHTML = feedbackSent
+    ? '<div class="feedback-modal-thanks">Thanks for the feedback — it really helps.</div>' +
+      '<div class="feedback-modal-actions"><button class="btn" data-action="close-feedback">Close</button></div>'
+    : '<button class="auth-close" data-action="close-feedback" aria-label="Close">&times;</button>' +
+      '<div class="feedback-modal-title">Share feedback</div>' +
+      '<div class="feedback-modal-sub">What\'s working, what\'s not, or anything you\'d like to see added.</div>' +
+      '<textarea id="gfb-textarea" class="feedback-modal-textarea" placeholder="Your thoughts…">' + esc(generalFeedbackText) + '</textarea>' +
+      '<div class="feedback-modal-actions">' +
+        '<button class="btn" data-action="close-feedback">Cancel</button>' +
+        '<button class="btn btn-primary" data-action="submit-general-feedback">Send</button>' +
+      '</div>';
 }
 
 function destinationPills(){
@@ -840,6 +868,7 @@ function renderAuthScreen(){
 
 function renderAll(){
   renderTopbar();
+  renderFeedbackModal();
   const app = document.getElementById("app");
   let body = "";
 
@@ -1022,6 +1051,22 @@ async function submitFeedback(){
   await saveFeedbackToDb({ rating: state.promptRating, results_rating: state.resultsRating, comment });
   state.feedbackSent = true;
   renderAll();
+}
+
+async function submitGeneralFeedback(){
+  const ta = document.getElementById("gfb-textarea");
+  const text = (ta ? ta.value.trim() : generalFeedbackText);
+  if (!text) return;
+  generalFeedbackText = text;
+  try {
+    await fetch("/api/general-feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment: text })
+    });
+  } catch(e){ /* silent */ }
+  feedbackSent = true;
+  renderFeedbackModal();
 }
 
 /* =====================================================================
