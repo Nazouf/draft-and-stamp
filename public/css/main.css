@@ -345,6 +345,10 @@
   .question-hint{color:var(--muted);font-size:0.85rem;font-style:italic;margin-bottom:18px;}
   .prefill-note{font-size:0.8rem;color:var(--muted);margin-bottom:6px;}
   .question-priority-badge{display:inline-block;font-size:0.72rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#1a5276;background:#d6eaf8;border:1px solid #aed6f1;border-radius:4px;padding:2px 7px;margin-bottom:10px;}
+  .batch-stack{display:flex;flex-direction:column;gap:18px;margin:14px 0 18px;}
+  .batch-q{padding:14px 16px;border:1px solid var(--paper-line);border-radius:8px;background:var(--paper-soft);}
+  .batch-q .question-hint{margin-bottom:10px;}
+  .batch-q .free-text-input{min-height:64px;}
   .option-stack{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
   .option-btn{
     text-align:left;border:1.5px solid var(--paper-line);background:var(--paper-soft);

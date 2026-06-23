@@ -142,7 +142,7 @@ function renderProgress(){
   const s = state.screen;
   let step;
   if (["classifying","classified","considerations_loading","considerations"].includes(s)) step = 1;
-  else if (["loading_question","interview","review"].includes(s)) step = 2;
+  else if (["loading_question","interview","interview_batch","review"].includes(s)) step = 2;
   else if (["staging_loading","staged","generating_loading","result"].includes(s)) step = 3;
   else return "";
   const labels = ["Classify","Interview","Generate"];
@@ -509,6 +509,61 @@ function renderOptionInput(q){
     '<textarea id="free-text-input" class="free-text-input" placeholder="Type your answer…">' + esc(state.freeTextDraft) + '</textarea>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="submit-free-text">Confirm</button></div>' +
     '<button class="custom-toggle ai-decide-btn" data-action="ai-decides">✦ Let AI choose the best approach for me</button>';
+}
+
+function renderBatchQuestion(q){
+  const ba = state.batchAnswers || {};
+  let input = '';
+  if (q.input_type === "free_text"){
+    const val = ba[q.id] != null ? ba[q.id] : (q.prefill || "");
+    input = '<textarea id="batch-text-' + esc(q.id) + '" class="free-text-input" placeholder="Type your answer… (optional)">' + esc(val) + '</textarea>';
+  } else if (q.input_type === "multi_select"){
+    const opts = q.options || [];
+    const sel = Array.isArray(ba[q.id]) ? ba[q.id] : [];
+    input = '<div class="option-stack">' + opts.map(o => {
+      const on = sel.includes(o.label);
+      return '<div class="check-row" data-action="batch-toggle-multi" data-qid="' + esc(q.id) + '" data-value="' + esc(o.label) + '">' +
+        '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
+        '<span class="option-label">' + esc(o.label) + '</span>' +
+      '</div>';
+    }).join("") + '</div>';
+  } else {
+    // single_select (and any unexpected type) — radio-style check rows
+    const opts = q.options || [];
+    if (!opts.length){
+      const val = ba[q.id] != null ? ba[q.id] : "";
+      input = '<textarea id="batch-text-' + esc(q.id) + '" class="free-text-input" placeholder="Type your answer… (optional)">' + esc(val) + '</textarea>';
+    } else {
+      input = '<div class="option-stack">' + opts.map(o => {
+        const on = ba[q.id] === o.label;
+        return '<div class="check-row" data-action="batch-select-option" data-qid="' + esc(q.id) + '" data-value="' + esc(o.label) + '">' +
+          '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
+          '<span class="option-label">' + esc(o.label) + '</span>' +
+          (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
+        '</div>';
+      }).join("") + '</div>' +
+      '<button class="custom-toggle ai-decide-btn" data-action="batch-ai-decides" data-qid="' + esc(q.id) + '">✦ Let AI choose this one</button>';
+    }
+  }
+  return '<div class="batch-q">' +
+    '<p class="question-text" style="font-size:1rem;margin-bottom:4px;">' + esc(q.text) + '</p>' +
+    (q.hint ? '<p class="question-hint">' + esc(q.hint) + '</p>' : '') +
+    input +
+  '</div>';
+}
+
+function renderInterviewBatch(){
+  const batch = state.currentBatch || [];
+  let html = '';
+  html += '<div class="progress-note">' + state.qaHistory.length + ' decision' + (state.qaHistory.length===1?"":"s") + ' logged so far</div>';
+  html += '<p class="question-text" style="margin-bottom:2px;">A few quick preferences</p>' +
+          '<p class="question-hint" style="margin-top:0;">Answer what you like — leave any blank and the AI will use a sensible default.</p>';
+  html += '<div class="batch-stack">' + batch.map(renderBatchQuestion).join('') + '</div>';
+  html += '<div class="btn-row"><button class="btn btn-primary" data-action="submit-batch">Continue</button></div>';
+  html += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px;">' +
+            (state.qaHistory.length ? '<button class="skip-btn" data-action="back-question" style="opacity:0.6;">← Undo last answer</button>' : '') +
+          '</div>';
+  return html;
 }
 
 function renderInterview(){
@@ -917,6 +972,7 @@ function renderAll(){
     case "considerations": body = renderConsiderations(); break;
     case "loading_question": body = '<p class="loading-line">Thinking about what to ask next… <span id="question-timer" style="color:var(--muted);font-size:0.9em;">' + (questionElapsed > 0 ? questionElapsed + "s…" : "") + '</span><span class="cursor">▌</span></p>'; break;
     case "interview": body = renderInterview(); break;
+    case "interview_batch": body = renderInterviewBatch(); break;
     case "staging_loading": body = renderLoading("Planning how to break this into stages…"); break;
     case "staged": body = renderStaged(); break;
     case "generating_loading": body = '<p class="loading-line">Writing your prompt… <span id="generate-timer" style="color:var(--muted);font-size:0.9em;">' + (generateElapsed > 0 ? generateElapsed + "s…" : "") + '</span><span class="cursor">▌</span></p>'; break;

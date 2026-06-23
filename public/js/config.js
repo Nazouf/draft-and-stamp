@@ -166,7 +166,7 @@ const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 // Aliases used in a few legacy logUsage call sites before modelUsed is returned
 const FAST_MODEL   = FAST_MODELS[0];
 const STRONG_MODEL = STRONG_MODELS[0];
-const APP_VERSION  = "v3.9.29";
+const APP_VERSION  = "v3.9.30";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -212,35 +212,41 @@ const CONSIDERATIONS_SCHEMA = {
   required:["required_topics"]
 };
 
+const QUESTION_ITEM_SCHEMA = {
+  type:"object",
+  properties:{
+    id:{ type:"string" },
+    text:{ type:"string" },
+    input_type:{ type:"string", enum:["single_select","multi_select","slider","free_text"] },
+    options:{
+      type:"array",
+      nullable:true,
+      items:{
+        type:"object",
+        properties:{
+          label:{ type:"string" },
+          example:{ type:"string", nullable:true }
+        },
+        required:["label"]
+      }
+    },
+    hint:{ type:"string", nullable:true },
+    covers_topic_id:{ type:"string", nullable:true },
+    priority:{ type:"string", enum:["critical","enrichment"], nullable:true },
+    prefill:{ type:"string", nullable:true }
+  },
+  required:["id","text","input_type"]
+};
+
 const SELECT_QUESTION_SCHEMA = {
   type:"object",
   properties:{
-    action:{ type:"string", enum:["ask_question","complete"] },
-    next_question:{
-      type:"object",
+    action:{ type:"string", enum:["ask_question","ask_batch","complete"] },
+    next_question:{ ...QUESTION_ITEM_SCHEMA, nullable:true },
+    batch_questions:{
+      type:"array",
       nullable:true,
-      properties:{
-        id:{ type:"string" },
-        text:{ type:"string" },
-        input_type:{ type:"string", enum:["single_select","multi_select","slider","free_text"] },
-        options:{
-          type:"array",
-          nullable:true,
-          items:{
-            type:"object",
-            properties:{
-              label:{ type:"string" },
-              example:{ type:"string", nullable:true }
-            },
-            required:["label"]
-          }
-        },
-        hint:{ type:"string", nullable:true },
-        covers_topic_id:{ type:"string", nullable:true },
-        priority:{ type:"string", enum:["critical","enrichment"], nullable:true },
-        prefill:{ type:"string", nullable:true }
-      },
-      required:["id","text","input_type"]
+      items:QUESTION_ITEM_SCHEMA
     }
   },
   required:["action"]

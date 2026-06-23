@@ -276,6 +276,8 @@ function freshState(){
     considerationsDone:false,
     qaHistory:[],
     currentQuestion:null,
+    currentBatch:null,
+    batchAnswers:{},
     multiSelections:[],
     customAnswerMode:false,
     freeTextDraft:"",
@@ -760,6 +762,30 @@ async function runSelectQuestion(forceTopic){
     const { text, usage, modelUsed: sqModel } = await callGemini(getSelectQuestionSystem(), buildSelectQuestionMsg(forceTopic), SELECT_QUESTION_SCHEMA, 800, 0, FAST_MODELS);
     const json = parseJSON(text);
     logUsage("select_question", sqModel, usage);
+    // Batch of independent questions to show on one screen.
+    const batch = Array.isArray(json.batch_questions) ? json.batch_questions.filter(Boolean) : [];
+    if (json.action === "ask_batch" && batch.length){
+      clearInterval(questionTimerInterval); questionTimerInterval = null;
+      if (batch.length === 1){
+        // A "batch" of one is just a normal question — render it the usual way.
+        if (state.qaHistory.length === 0) fireFunnelEvent("interview_started");
+        state.currentQuestion = batch[0];
+        state.currentBatch = null;
+        state.multiSelections = [];
+        state.customAnswerMode = false;
+        state.freeTextDraft = batch[0].prefill || "";
+        state.screen = "interview";
+        renderAll();
+        return;
+      }
+      if (state.qaHistory.length === 0) fireFunnelEvent("interview_started");
+      state.currentBatch = batch;
+      state.batchAnswers = {};
+      state.currentQuestion = null;
+      state.screen = "interview_batch";
+      renderAll();
+      return;
+    }
     const pendingRequired = state.requiredTopics.filter(t => !t.dismissed && !t.covered);
     if ((json.action === "complete" || !json.next_question) && pendingRequired.length){
       if (forceTopic){
@@ -784,6 +810,7 @@ async function runSelectQuestion(forceTopic){
       clearInterval(questionTimerInterval); questionTimerInterval = null;
       if (state.qaHistory.length === 0) fireFunnelEvent("interview_started");
       state.currentQuestion = json.next_question;
+      state.currentBatch = null;
       state.multiSelections = [];
       state.customAnswerMode = false;
       state.freeTextDraft = json.next_question.prefill || "";
@@ -810,6 +837,51 @@ function submitAnswer(answerLabel){
   state.customAnswerMode = false;
   state.freeTextDraft = "";
   saveProgressToDb(); // fire-and-forget — creates run on first answer, updates qa_pairs on each subsequent
+  runSelectQuestion();
+}
+
+// Capture any text typed into batch free-text fields into state before a
+// re-render (triggered by selecting an option in another question) wipes them.
+function syncBatchFreeText(){
+  (state.currentBatch || []).forEach(q => {
+    if (q.input_type === "free_text"){
+      const el = document.getElementById("batch-text-" + q.id);
+      if (el) state.batchAnswers[q.id] = el.value;
+    }
+  });
+}
+
+// Submit a whole batch screen at once. Reads free-text values from the DOM,
+// pulls select/multi answers from state.batchAnswers, records every question
+// to qaHistory (unanswered ones become a delegated-choice marker so they are
+// not re-asked), then continues the interview loop.
+function submitBatch(){
+  const batch = state.currentBatch || [];
+  if (!batch.length){ state.currentBatch = null; runSelectQuestion(); return; }
+  batch.forEach(q => {
+    let answer = "";
+    if (q.input_type === "free_text"){
+      const el = document.getElementById("batch-text-" + q.id);
+      answer = el ? el.value.trim() : "";
+    } else if (q.input_type === "multi_select"){
+      const sel = state.batchAnswers[q.id];
+      answer = Array.isArray(sel) ? sel.join(", ") : "";
+    } else {
+      answer = state.batchAnswers[q.id] || "";
+    }
+    if (!answer) answer = "[No preference — use your best judgment]";
+    state.qaHistory.push({ id:q.id, text:q.text, input_type:q.input_type,
+      priority:q.priority||null, covers_topic_id:q.covers_topic_id||null,
+      answer:answer, _question:q });
+    if (q.covers_topic_id){
+      const t = state.requiredTopics.find(rt => rt.id === q.covers_topic_id);
+      if (t) t.covered = true;
+    }
+  });
+  state.currentBatch = null;
+  state.batchAnswers = {};
+  state.customAnswerMode = false;
+  saveProgressToDb();
   runSelectQuestion();
 }
 
@@ -1016,6 +1088,29 @@ document.getElementById("app").addEventListener("click", function(e){
       break;
     }
     case "ai-decides": submitAnswer("[AI DECIDES]"); break;
+    case "batch-select-option": {
+      syncBatchFreeText();
+      state.batchAnswers[el.dataset.qid] = el.dataset.value;
+      renderAll();
+      break;
+    }
+    case "batch-toggle-multi": {
+      syncBatchFreeText();
+      const qid = el.dataset.qid, v = el.dataset.value;
+      const arr = Array.isArray(state.batchAnswers[qid]) ? state.batchAnswers[qid] : [];
+      const idx = arr.indexOf(v);
+      if (idx === -1) arr.push(v); else arr.splice(idx, 1);
+      state.batchAnswers[qid] = arr;
+      renderAll();
+      break;
+    }
+    case "batch-ai-decides": {
+      syncBatchFreeText();
+      state.batchAnswers[el.dataset.qid] = "[AI DECIDES]";
+      renderAll();
+      break;
+    }
+    case "submit-batch": submitBatch(); break;
     case "submit-free-text": {
       const input = document.getElementById("free-text-input");
       const val = input ? input.value.trim() : "";
