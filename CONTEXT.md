@@ -10,6 +10,10 @@ A prompt-engineering assistant that turns vague requests into polished, ready-to
 
 Live on Render. Users paste the result straight into Claude, ChatGPT, Gemini, Midjourney, etc.
 
+**Categories (12):** `writing`, `creative_writing`, `summarisation`, `code`, `image`, `research`, `financial_model`, `presentation`, `video`, `agent_prompt`, `legal`, `other`. (`creative_writing` and `summarisation` were split out from `writing`/`research` in v3.9.29 based on real-usage data — see "Data-driven pipeline design" below.)
+
+**Much of the interview/generation logic since v3.9.29 is grounded in analysis of two public datasets** (WildChat-1M + OpenAssistant), not just intuition. The "Data-driven pipeline design" section documents the findings and which prompt rules they justify. The analysis scripts live in the repo root (untracked) — see "Research artifacts".
+
 ---
 
 ## Fouzan's hard rules — never break these
@@ -55,8 +59,8 @@ Persistent config lives in the `settings` table as key/value pairs. `applySettin
 - `thinkingBudget: 0` = thinking off (all non-generate steps)
 - Generate step picks budget dynamically based on `state.classification`:
   - `complexity === "small"` → FAST_MODELS, budget 0 (~3-5s)
-  - `complexity === "big"`, simple categories (writing/research/image/video/presentation/other) → STRONG_MODELS, budget 1024 (~10-20s)
-  - `complexity === "big"`, heavy categories (code/financial_model/legal/agent_prompt) → STRONG_MODELS, budget 5120 (~25-40s)
+  - `complexity === "big"`, light categories (everything not in heavyCats — writing, creative_writing, summarisation, research, image, video, presentation, other) → STRONG_MODELS, budget 1024 (~10-20s)
+  - `complexity === "big"`, heavy categories (`heavyCats = ["code","financial_model","legal","agent_prompt"]`) → STRONG_MODELS, budget 5120 (~25-40s)
 
 ### Auth gate and rendering flow
 `renderAll()` in `render.js` is the single render entry point. It checks in order:
@@ -69,6 +73,8 @@ Persistent config lives in the `settings` table as key/value pairs. `applySettin
 The auth modal (`#auth-overlay`) is a sibling of `#app` in the DOM — OUTSIDE `#app`. Therefore the main delegated click handler on `#app` never sees clicks inside the modal. The `#auth-overlay` element has its own dedicated delegated handler.
 
 The feedback modal (`#feedback-overlay`) follows the same pattern — sibling of `#app`, its own delegated handler for close/submit actions.
+
+**Google OAuth reassurance note (v3.9.28):** Both "Continue with Google" buttons (upsell modal + main welcome modal) are followed by a `<p class="auth-google-note">` reading "The sign-in screen may show an unfamiliar URL — this is expected and secure." This addresses the Google consent screen showing the Supabase project URL (`wwbjeoxhgszgdfgfeova.supabase.co`) instead of the app name. There is no free fix for the URL itself — it comes from the OAuth `redirect_uri` routing through Supabase; removing it would require Supabase Pro, a custom OAuth callback, or a verified custom domain + Google brand verification. The note is the accepted workaround. CSS class `auth-google-note` has separate desktop/mobile sizing.
 
 ### Anonymous (guest) user flow
 - On first visit, non-logged-in users see the auth screen with a "Continue as guest — N free prompts" button (when `anonDailyLimit > 0`)
@@ -116,29 +122,63 @@ The feedback modal (`#feedback-overlay`) follows the same pattern — sibling of
 - The share page (`renderSharedResult()`) handles empty prompts gracefully with a friendly message instead of a blank page.
 - Share links work without sign-in (public endpoint `/api/share/:id`).
 
+### Batched questions (v3.9.30–3.9.31)
+The interview can ask **2–4 independent questions on one screen** instead of strictly one-per-turn. This reduces friction (one round-trip + one Gemini call instead of several) for questions whose answers don't depend on each other — e.g. tone, length, direction, output shape for a writing task.
+
+- **Schema:** `SELECT_QUESTION_SCHEMA` (config.js) has an `ask_batch` action and a `batch_questions` array (each item is the shared `QUESTION_ITEM_SCHEMA`). Foundational/cascading questions (company → exchange → ticker) still come one at a time via `ask_question`.
+- **State:** `state.currentBatch` (array) + `state.batchAnswers` (map keyed by question id; custom "write your own" answers stored under `custom:<id>`).
+- **Flow (app.js):** `runSelectQuestion` intercepts `action === "ask_batch"` **before** the existing `!next_question` guards (a batch has `next_question: null`, which would otherwise trigger the complete/forced-topic path). A batch of 1 degrades to a normal single question. `submitBatch()` reads free-text/custom from the DOM, pulls select/multi from `batchAnswers`, records every question to `qaHistory` (unanswered → `"[No preference — use your best judgment]"`), then loops. `syncBatchFreeText()` captures typed text into state before any option-click re-render wipes it.
+- **Render (render.js):** new `interview_batch` screen → `renderInterviewBatch()` / `renderBatchQuestion()`. Reuses existing `check-row`/`check-box` widgets (single_select rendered radio-style, multi_select as checkboxes). Each select question has an inline "Or write your own answer…" field (`batch-custom-<id>`) that overrides the selection at submit. Sliders are never batched. CSS: `.batch-stack`, `.batch-q`, `.batch-custom`.
+- **The whole batch path is additive** — if the model never returns `ask_batch`, behavior is exactly as before. Question budget counts every batched question (batching reduces friction, not the count).
+
+### Data-driven pipeline design (v3.9.29+)
+The interview rules are grounded in analysis of two independent public datasets:
+- **WildChat-1M** (real ChatGPT conversations) — 2,495 multi-turn conversations where the user corrected the AI on turn 2+, mined from 120k.
+- **OpenAssistant oasst2** — 2,085 correction follow-ups, used as a cross-validation source (LMSYS-Chat-1M is gated).
+
+**Key findings that drove changes:**
+- Misses are rarely single-dimensional: 21% of corrections stacked 4+ distinct asks at once. → the "Defaults I assumed" surfacing + category-aware self-check.
+- More context up front = fewer correction rounds: 6+ round conversations averaged 162 opening words vs 289 for ≤3 rounds; the **26–50 word band took the most rounds (5.19)** — "ambitious but under-specified" is the danger zone. → the anti-collapse rule.
+- Top cross-validated corrections: **length, direction/angle, missing-detail, format/structure, regenerate-from-scratch.** Tone is real but ranks lower than a single-source pass suggested.
+- **Audience was a keyword artifact** (21% in WildChat → 1.1% in OASST) — deliberately NOT a must-ask; reintroduced only as soft enrichment for external-facing tasks.
+- `creative_writing` (~11–17% of corrections) and `summarisation` (~5%) were distinct enough to become their own categories.
+
+### Prompt structure: the interview-control sections (prompts.js → `SELECT_QUESTION_SYSTEM`)
+- **`<category_must_ask>`** — per-category non-negotiable foundational questions, asked one per turn as critical priority, skipped if the request already answered them. Every working category has a block (see "Must-ask questions per category" below).
+- **`<high_value_enrichment>`** — two high-leverage enrichment offers: (1) **example/style reference** (few-shot) for writing/creative/code/agent — paste an example to match; (2) **audience** for external-facing/professional output only.
+- **`<under_specified_complex_requests>`** — anti-collapse rule. `buildSelectQuestionMsg` (app.js) computes the request word count; a big task under 40 words is flagged `UNDER-SPECIFIED COMPLEX REQUEST`, and this rule then treats length/shape/direction/must-include as critical (prefers a single batch to close the gap).
+- **`<batching_independent_questions>`** — when to use `ask_batch` vs one-at-a-time.
+
+### Prompt structure: the generation sections (prompts.js → `GENERATE_SYSTEM`)
+- **SURFACE THE DEFAULTS YOU ASSUMED** (in `<writing_and_correspondence_guidance>`) — for writing/content tasks, any of length/shape/tone/direction that wasn't settled in the interview must be listed as its own entry in the `assumptions` array, so multi-dimensional misses are correctable at a glance.
+- **`<user_supplied_material>`** — embed any pasted example **verbatim** in a labeled block (few-shot), and pass through pasted source text / data / existing code faithfully rather than compressing it to a label (context engineering).
+- **`<self_verification>`** — close the prompt with a category-aware self-check: writing checks captured constraints, code traces the test case, financial audits figures line-by-line, research verifies claims. Targets the costly "rewrite from scratch" failure.
+
 ---
 
-## Current version: v3.9.25
+## Current version: v3.9.35
 
 ### Full version history (recent)
 
 | Version | What changed |
 |---------|-------------|
 | v2.9.11 | Fixed anonDailyLimit=0 loophole; fixed model_usage null on insert path |
-| v2.9.12 | Added Share button to history cards |
-| v2.9.13 | Share button shown on all history cards regardless of prompt count |
-| v2.9.14 | Added Feedback button + modal; dot-menu now visible on desktop |
-| v2.9.15 | Removed Sign in from anon dot-menu (stays in topbar only) |
-| v2.9.16 | Desktop dot-menu: email/Feedback/Dark-Light only; Start over + Sign out moved outside |
-| v2.9.17 | Removed email chip from desktop topbar (email only in dot-menu now) |
-| v2.9.18 | Mobile dot-menu adds Start over + Sign out; empty share page gets friendly message |
-| v3.9.19 | Fixed generated_prompts never saving correctly (saveRun saved wrong field; added RLS UPDATE policy to runs table) |
-| v3.9.20 | Added error logging to saveRun UPDATE path (was silently failing) |
-| v3.9.21 | My Prompts only shows completed runs (generated_prompts IS NOT NULL filter on /api/runs) |
-| v3.9.22 | Moved "Start a new prompt" button to top of history page |
-| v3.9.23 | "Start a new prompt" button moved inline with "My Prompts" title (right side) |
-| v3.9.24 | "← Back" button preserves typed request; history-back action doesn't reset state |
-| v3.9.25 | Admin feedback table: "General" label for rows with run_id null instead of broken button |
+| v2.9.12–18 | Share button, Feedback modal, topbar/dot-menu layout iterations |
+| v3.9.19 | Fixed generated_prompts never saving (wrong field in saveRun; added RLS UPDATE policy to runs) |
+| v3.9.20 | Error logging on saveRun UPDATE path |
+| v3.9.21 | My Prompts only shows completed runs (generated_prompts IS NOT NULL) |
+| v3.9.22–24 | History page button placement; "← Back" preserves typed request |
+| v3.9.25 | Admin feedback: "General" label for run_id-null rows instead of broken button |
+| v3.9.26 | CONTEXT.md rewrite + minor |
+| v3.9.27 | LinkedIn posts classified "professional" stakes; LinkedIn must-ask block (tone/avoid/angle) |
+| v3.9.28 | Universal writing must-ask (tone + length critical for all writing); Google OAuth reassurance note |
+| v3.9.29 | **Added `creative_writing` + `summarisation` categories**; direction/angle as universal writing must-ask (data-driven) |
+| v3.9.30 | **Batched questions** (`ask_batch` + `interview_batch` screen); Tier-1: output-shape must-ask, "Defaults I assumed" surfacing, writing self-check |
+| v3.9.31 | "Write your own answer" field on batch select questions |
+| v3.9.32 | Must-ask questions added for code, image, research (previously seed-only) |
+| v3.9.33 | Few-shot/example capture + verbatim embedding; raw-context passthrough; category-aware self-check; audience as soft enrichment; per-category blockers (summarisation source, code test-case, image aspect-ratio, legal core obligation) |
+| v3.9.34 | Must-include facts (writing, scoped to thin requests); anti-collapse rule for under-specified big tasks; direction as must-ask for code (approach) + research (angle) |
+| v3.9.35 | Docs only — comprehensive CONTEXT.md update through v3.9.34 (no app behavior change) |
 
 ---
 
@@ -177,7 +217,20 @@ Key settings stored in `settings` table:
 | `public/css/main.css` | All styles, single file |
 | `public/index.html` | Shell HTML, loads scripts in order, footer version, CSS cache-bust link, #auth-overlay, #feedback-overlay |
 | `public/admin.html` | Admin panel, self-contained |
-| `.env` | Never committed. Contains GEMINI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ADMIN_PASSWORD |
+| `.env` | Never committed. Contains GEMINI_API_KEY(s), SUPABASE_URL, SUPABASE keys, PORT |
+
+### Research artifacts (repo root, untracked — NOT part of the deployed app)
+
+Standalone Python scripts used to mine public datasets for the data-driven pipeline design. Pure local analysis, no app dependency. Safe to ignore for app work; useful if revisiting the interview/generation rules.
+
+| File | Purpose |
+|------|---------|
+| `analyze_wildchat.py` | First-pass WildChat correction analysis (category × correction-type) |
+| `deep_analysis.py` | Deeper pass: stacked corrections, prompt-length vs rounds, n-gram mining |
+| `crossval_oasst.py` | Cross-validation against OpenAssistant oasst2 |
+| `*_report.txt`, `*_results.json` | Generated outputs from the above |
+
+Requires `pip install datasets`. WildChat streams fine unauthenticated; LMSYS-Chat-1M is gated (not used). **Do not send dataset rows to Gemini** — Fouzan asked for local analysis only.
 
 ---
 
@@ -188,6 +241,29 @@ Key settings stored in `settings` table:
 3. **Select question** — FAST_MODELS, budget 0. Picks the next interview question based on what's been covered. Called once per question turn.
 4. **Stage planner** — FAST_MODELS, budget 0. Only runs for `complexity=big`. Breaks the task into stages.
 5. **Generate** — model pool and thinking budget chosen dynamically (see thinking budget system above).
+
+---
+
+## Must-ask questions per category
+
+Defined in `<category_must_ask>` inside `SELECT_QUESTION_SYSTEM` (prompts.js). Asked as critical priority before enrichment; each skipped if the request already answered it. The matching enrichment inspiration lives in `TOPIC_SEEDS` (config.js).
+
+- **Writing (universal):** tone · length · direction/constraints · output shape · must-include specifics (last only when the request is thin on detail). *Exception: trivial informal writing skips all.*
+- **Writing (cover letters/applications):** sender's name · real certs/credentials · specific achievements.
+- **Writing (LinkedIn/professional social):** voice/tone · what to avoid · narrative angle.
+- **Creative writing:** genre/style · narrative direction · what to avoid.
+- **Summarisation:** confirm the source content is provided · output style · compression level · what to preserve.
+- **Code:** language/framework/environment · a literal test case (input→output) · where it runs · direction/approach (constraints, library, simple-vs-robust).
+- **Image:** which tool · subject/scene · visual style/medium · aspect-ratio/use.
+- **Research:** purpose + output format · angle/focus + what to exclude · depth vs breadth · the person's level.
+- **Financial model:** current revenue / core metric (then the deeper probing chain: listing status → exchange → ticker → base year → FX → commodity → valuation approach).
+- **Presentation:** how many slides.
+- **Video (generation):** AI-tool-vs-human-script · subject + motion. **(script):** the single key message.
+- **Agent prompt:** the one core job (always-do / never-do) · platform.
+- **Legal:** jurisdiction · parties + roles · core obligation/exchange.
+- **Other:** no fixed must-asks — seed-driven.
+
+Cross-cutting: contradictions are resolved before tone/style; identifying details (real person/company) are asked before soft preferences.
 
 ---
 
@@ -209,3 +285,7 @@ Key settings stored in `settings` table:
 - CSS cache-busting: always update the `?v=X.X.X` query string on the `<link>` tag in `index.html` when changing CSS.
 - No comments explaining WHAT code does — only WHY if non-obvious.
 - No emojis in code or UI unless Fouzan specifically asks.
+- **Quality of questions over quantity.** Spend the question budget on the high-correction dimensions (length, shape, direction, must-include facts) + an example; don't pad with low-value confirmation. Every new must-ask must be justified, and must skip when the request already answered it. Over-asking causes abandonment.
+- **Most pipeline changes are prompt-only** (edits to `prompts.js` `SELECT_QUESTION_SYSTEM` / `GENERATE_SYSTEM`, plus `TOPIC_SEEDS`/`STAGE_HINTS` in config.js). These are low-risk. The batched-question feature is the only recent architecture change — keep new question types additive so the single-question path is never broken.
+- After editing any JS, run `node --check <file>` before committing (no test suite; this catches template-literal/syntax breaks).
+- When designing interview/generation rules, prefer evidence (the datasets) + judgment + a quick best-practice check over intuition alone — that's how the current rules were built.
