@@ -196,9 +196,38 @@ async function updatePassword(){
   setTimeout(() => { authSuccess = null; renderAll(); }, 2500);
 }
 
+// Guest runs (user_id null) can't be read-back or updated under RLS, so they are
+// persisted through the server's service-role endpoint instead of the anon client.
+async function trackRunOnServer(extra){
+  const c = state.classification;
+  const payload = Object.assign({
+    id:            currentRunId || undefined,
+    request:       state.originalRequest,
+    destination:   state.destination,
+    category:      c?.primary_category || null,
+    complexity:    c?.complexity || null,
+    stakes:        c?.stakes || null,
+    output_format: c?.output_format || null,
+    mode:          state.mode,
+    qa_pairs:      state.qaHistory
+  }, extra || {});
+  try {
+    const res = await fetch("/api/track-run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.id) currentRunId = data.id;
+    return currentRunId;
+  } catch(e){ return null; }
+}
+
 // Called on every answer submission — creates the run record on the first answer,
 // then updates qa_pairs on each subsequent one. Fire-and-forget (no await at call site).
 async function saveProgressToDb(){
+  if (!currentUser) { await trackRunOnServer(); return; }
   if (!sbClient) return;
   const c = state.classification;
   try {
@@ -223,7 +252,9 @@ async function saveProgressToDb(){
 }
 
 async function saveRun(){
-  if (!sbClient || !state.finalResult) return null;
+  if (!state.finalResult) return null;
+  if (!currentUser) return await trackRunOnServer({ generated_prompts: state.finalResult, model_usage: state.usageEvents });
+  if (!sbClient) return null;
   const c = state.classification;
   try{
     if (currentRunId){

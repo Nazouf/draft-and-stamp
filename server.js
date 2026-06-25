@@ -24,7 +24,18 @@ const geminiLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v3.9.35";
+// Lighter limiter for the guest run-tracking endpoint — a legitimate session
+// only saves a handful of times, so this just caps direct abuse of the endpoint.
+const trackRunLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests." },
+  skip: () => !rateLimitEnabled
+});
+
+const APP_VERSION = "v3.9.36";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -452,6 +463,51 @@ app.post("/api/general-feedback", async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Track a run (used by guest sessions) ──────────────────────────────────────
+// Guest runs have user_id = null. RLS lets the anon client INSERT them but not
+// read them back or UPDATE them (the read/update policies require auth.uid() =
+// user_id, which excludes NULL). So guest persistence is routed here and done
+// with the service-role client, which bypasses RLS. Logged-in users still save
+// directly from the client. Updates are scoped to the caller's own rows.
+app.post("/api/track-run", trackRunLimiter, async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: "Storage unavailable" });
+  const b = req.body || {};
+  if (typeof b.request !== "string" || !b.request.trim()) {
+    return res.status(400).json({ error: "request required" });
+  }
+  const user = await verifyUser(req).catch(() => null);
+  try {
+    if (b.id) {
+      let upd = supabaseAdmin.from("runs").update({
+        qa_pairs:          b.qa_pairs ?? null,
+        generated_prompts: b.generated_prompts ?? null,
+        model_usage:       b.model_usage ?? null
+      }).eq("id", b.id);
+      upd = user?.id ? upd.eq("user_id", user.id) : upd.is("user_id", null);
+      const { error } = await upd;
+      if (error) throw error;
+      return res.json({ id: b.id });
+    }
+    const { data, error } = await supabaseAdmin.from("runs").insert({
+      user_id:       user?.id || null,
+      request:       b.request,
+      destination:   b.destination || null,
+      category:      b.category || null,
+      complexity:    b.complexity || null,
+      stakes:        b.stakes || null,
+      output_format: b.output_format || null,
+      mode:          b.mode || null,
+      qa_pairs:      b.qa_pairs ?? null,
+      generated_prompts: b.generated_prompts ?? null,
+      model_usage:   b.model_usage ?? null
+    }).select("id").single();
+    if (error) throw error;
+    res.json({ id: data?.id || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
