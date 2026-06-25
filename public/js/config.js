@@ -166,7 +166,7 @@ const STRONG_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"];
 // Aliases used in a few legacy logUsage call sites before modelUsed is returned
 const FAST_MODEL   = FAST_MODELS[0];
 const STRONG_MODEL = STRONG_MODELS[0];
-const APP_VERSION  = "v3.9.36";
+const APP_VERSION  = "v3.9.38";
 
 // Usage limits are enforced server-side when unrestricted_mode is off.
 
@@ -225,7 +225,7 @@ const QUESTION_ITEM_SCHEMA = {
         type:"object",
         properties:{
           label:{ type:"string" },
-          example:{ type:"string", nullable:true }
+          description:{ type:"string", nullable:true }
         },
         required:["label"]
       }
@@ -293,3 +293,7 @@ const GENERATE_SCHEMA = {
   },
   required:["assumptions","elevated_stakes_notes","prompts"]
 };
+
+// Refine reuses the generate output shape — it returns the same set of prompts,
+// rewritten to honour the person's one-line tweak.
+const REFINE_SCHEMA = GENERATE_SCHEMA;

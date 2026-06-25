@@ -35,7 +35,7 @@ const trackRunLimiter = rateLimit({
   skip: () => !rateLimitEnabled
 });
 
-const APP_VERSION = "v3.9.36";
+const APP_VERSION = "v3.9.38";
 
 // Model pools — priority order within each pool (first = preferred)
 const ALL_FAST_MODELS   = ["gemini-3.1-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it"];
@@ -734,7 +734,7 @@ app.get("/api/admin/feedback", requireAdmin, async (req, res) => {
   try {
     const { data, count, error } = await supabaseAdmin
       .from("feedback")
-      .select("id, created_at, rating, results_rating, comment, run_id, user_id", { count: "exact" })
+      .select("id, created_at, rating, results_rating, outcome, comment, run_id, user_id", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(page * limit, (page + 1) * limit - 1);
     if (error) throw error;

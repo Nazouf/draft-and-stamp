@@ -131,6 +131,15 @@ The interview can ask **2–4 independent questions on one screen** instead of s
 - **Render (render.js):** new `interview_batch` screen → `renderInterviewBatch()` / `renderBatchQuestion()`. Reuses existing `check-row`/`check-box` widgets (single_select rendered radio-style, multi_select as checkboxes). Each select question has an inline "Or write your own answer…" field (`batch-custom-<id>`) that overrides the selection at submit. Sliders are never batched. CSS: `.batch-stack`, `.batch-q`, `.batch-custom`.
 - **The whole batch path is additive** — if the model never returns `ask_batch`, behavior is exactly as before. Question budget counts every batched question (batching reduces friction, not the count).
 
+### Refine loop (v3.9.37)
+The result screen has a **Refine** box: the person types one plain-language tweak ("make it shorter", "use Python instead", "add a constraint about X") and the finished prompt(s) are rewritten in place. `runRefine()` (app.js) feeds the full current `state.finalResult.prompts` + the shared generate context + the instruction to a dedicated `REFINE_SYSTEM` (prompts.js) via `buildRefineMsg()`, using `REFINE_SCHEMA` (= `GENERATE_SCHEMA`) and the same model pool/budget as generation (`generateModelConfig()`). It is an edit, not a regen — same number/structure of prompts unless the tweak requires otherwise. On success it replaces `finalResult`, re-runs `saveRun()`, resets the feedback widgets, and re-types. Errors set `state.error.step = "refine"` (handled by `retryLastStep`). Refine controls are disabled during the typewriter and re-enabled via `enableRefineControls()`.
+
+### Per-stage generation + editable stage plan (v3.9.37)
+For a genuinely multi-stage task (`stagePlan` not collapsed and >1 stage), `runGenerate()` now fires **one Gemini call per stage in parallel** (`Promise.all` over `buildStageGenerateMsg(i)`), each with its own full response budget, instead of squeezing all stages into a single call. Each call returns one prompt; assumptions and elevated-stakes notes are merged + de-duped across stages. Single/collapsed plans still use the original single-call `buildGenerateMsg()` path. Both share `buildGenerateContextLines()`. The **staged screen is editable** before generation: edit each stage's title/purpose inline, remove, reorder (↑/↓), or add a part (max 4) — `renderStaged()` + `stageEdit*`/`stageMove`/`stageAdd`/`stageRemove` (app.js), state in module-level `stageEditIndex/Title/Purpose`.
+
+### Outcome tracking (v3.9.37)
+The per-run feedback block has a **"Did it work when you used it?"** row (worked / edited / failed) above the rating sliders. `setPromptOutcome()` saves to a new `feedback.outcome` text column via the existing `saveFeedbackToDb()` upsert (logged-in only, same as ratings). Surfaced in the admin Feedback tab. This is the highest-signal feedback — real-world effectiveness of the generated prompt, not just a self-rating.
+
 ### Data-driven pipeline design (v3.9.29+)
 The interview rules are grounded in analysis of two independent public datasets:
 - **WildChat-1M** (real ChatGPT conversations) — 2,495 multi-turn conversations where the user corrected the AI on turn 2+, mined from 120k.
@@ -156,7 +165,7 @@ The interview rules are grounded in analysis of two independent public datasets:
 
 ---
 
-## Current version: v3.9.35
+## Current version: v3.9.38
 
 ### Full version history (recent)
 
@@ -179,6 +188,9 @@ The interview rules are grounded in analysis of two independent public datasets:
 | v3.9.33 | Few-shot/example capture + verbatim embedding; raw-context passthrough; category-aware self-check; audience as soft enrichment; per-category blockers (summarisation source, code test-case, image aspect-ratio, legal core obligation) |
 | v3.9.34 | Must-include facts (writing, scoped to thin requests); anti-collapse rule for under-specified big tasks; direction as must-ask for code (approach) + research (angle) |
 | v3.9.35 | Docs only — comprehensive CONTEXT.md update through v3.9.34 (no app behavior change) |
+| v3.9.36 | Persist guest runs via service-role `/api/track-run` endpoint (RLS blocks NULL-user read/update on the anon client) |
+| v3.9.37 | **Four features:** (1) post-generation **refine** loop; (2) `other`-category must-asks; (3) real-world **outcome** tracking (worked/edited/failed); (4) **editable stage plan** + **per-stage parallel generation** |
+| v3.9.38 | **Option descriptions** — added `description` field to option schema (replaces `example`); all four option render paths (single_select button, multi_select check-row, batch single_select, batch multi_select) now show a muted one-liner below the label; system prompt instructs model to write a concrete ≤12-word description for every option |
 
 ---
 
@@ -261,7 +273,7 @@ Defined in `<category_must_ask>` inside `SELECT_QUESTION_SYSTEM` (prompts.js). A
 - **Video (generation):** AI-tool-vs-human-script · subject + motion. **(script):** the single key message.
 - **Agent prompt:** the one core job (always-do / never-do) · platform.
 - **Legal:** jurisdiction · parties + roles · core obligation/exchange.
-- **Other:** no fixed must-asks — seed-driven.
+- **Other:** what a good result looks like + who it's for · output shape and rough size/detail (then at most one enrichment on constraints). Kept light — over-asking on open-ended tasks backfires.
 
 Cross-cutting: contradictions are resolved before tone/style; identifying details (real person/company) are asked before soft preferences.
 

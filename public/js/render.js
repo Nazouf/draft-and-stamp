@@ -468,7 +468,7 @@ function renderOptionInput(q){
     return '<div class="option-stack">' + opts.map(o =>
       '<button class="option-btn" data-action="select-option" data-value="' + esc(o.label) + '">' +
         '<span class="option-label">' + esc(o.label) + '</span>' +
-        (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
+        (o.description ? '<span class="option-description">' + esc(o.description) + '</span>' : '') +
       '</button>'
     ).join("") + '</div>' + renderCustomToggle(q) +
     '<button class="custom-toggle ai-decide-btn" data-action="ai-decides">✦ Let AI choose the best option for me</button>';
@@ -483,7 +483,9 @@ function renderOptionInput(q){
       const on = state.multiSelections.includes(o.label);
       return '<div class="check-row" data-action="toggle-multi" data-value="' + esc(o.label) + '">' +
         '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
-        '<span class="option-label">' + esc(o.label) + '</span>' +
+        '<div class="option-label-wrap"><span class="option-label">' + esc(o.label) + '</span>' +
+        (o.description ? '<span class="option-description">' + esc(o.description) + '</span>' : '') +
+        '</div>' +
       '</div>';
     }).join("") + '</div>' +
     '<div class="btn-row"><button class="btn btn-primary" data-action="submit-multi">Continue</button></div>' +
@@ -531,7 +533,9 @@ function renderBatchQuestion(q){
       const on = sel.includes(o.label);
       return '<div class="check-row" data-action="batch-toggle-multi" data-qid="' + esc(q.id) + '" data-value="' + esc(o.label) + '">' +
         '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
-        '<span class="option-label">' + esc(o.label) + '</span>' +
+        '<div class="option-label-wrap"><span class="option-label">' + esc(o.label) + '</span>' +
+        (o.description ? '<span class="option-description">' + esc(o.description) + '</span>' : '') +
+        '</div>' +
       '</div>';
     }).join("") + '</div>' +
     renderBatchCustomField(q);
@@ -546,8 +550,9 @@ function renderBatchQuestion(q){
         const on = ba[q.id] === o.label;
         return '<div class="check-row" data-action="batch-select-option" data-qid="' + esc(q.id) + '" data-value="' + esc(o.label) + '">' +
           '<span class="check-box ' + (on?"on":"") + '">' + (on?"✓":"") + '</span>' +
-          '<span class="option-label">' + esc(o.label) + '</span>' +
-          (o.example ? '<span class="option-example">' + esc(o.example) + '</span>' : '') +
+          '<div class="option-label-wrap"><span class="option-label">' + esc(o.label) + '</span>' +
+          (o.description ? '<span class="option-description">' + esc(o.description) + '</span>' : '') +
+          '</div>' +
         '</div>';
       }).join("") + '</div>' +
       renderBatchCustomField(q) +
@@ -626,13 +631,44 @@ function renderStaged(){
   const n = plan.stages.length;
   const single = plan.collapsed_to_single || n <= 1;
   const stampText = single ? "One part" : "Staged · " + n + " parts";
-  const sub = single ? "Turned out simple enough for a single prompt." : "Big enough to split into stages.";
+  const sub = single
+    ? "Turned out simple enough for a single prompt."
+    : "Big enough to split into stages — tweak the plan below if you like, then generate.";
+
+  const stagesHtml = plan.stages.map((s,i) => {
+    if (stageEditIndex === i){
+      return '<li class="stage-item stage-editing">' +
+        '<span class="stage-num">0' + (i+1) + '</span>' +
+        '<div class="stage-edit-fields">' +
+          '<input type="text" id="stage-edit-title" class="stage-edit-input" value="' + esc(stageEditTitle) + '" placeholder="Part title">' +
+          '<textarea id="stage-edit-purpose" class="stage-edit-textarea" placeholder="What this part should produce">' + esc(stageEditPurpose) + '</textarea>' +
+          '<div class="stage-edit-actions">' +
+            '<button class="btn btn-small btn-primary" data-action="stage-save" data-value="' + i + '">Save</button>' +
+            '<button class="btn btn-small" data-action="stage-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</li>';
+    }
+    return '<li class="stage-item">' +
+      '<span class="stage-num">0' + (i+1) + '</span>' +
+      '<div class="stage-body">' +
+        '<div class="stage-title">' + esc(s.title) + '</div>' +
+        '<div class="stage-purpose">' + esc(s.purpose) + '</div>' +
+        '<div class="stage-controls">' +
+          '<button class="stage-ctrl" data-action="stage-edit" data-value="' + i + '">Edit</button>' +
+          (i > 0 ? '<button class="stage-ctrl" data-action="stage-up" data-value="' + i + '" title="Move up">↑</button>' : '') +
+          (i < n-1 ? '<button class="stage-ctrl" data-action="stage-down" data-value="' + i + '" title="Move down">↓</button>' : '') +
+          (n > 1 ? '<button class="stage-ctrl stage-ctrl-danger" data-action="stage-remove" data-value="' + i + '">Remove</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</li>';
+  }).join("");
+
   return '' +
     '<div class="stamp-wrap"><span class="stamp">' + esc(stampText) + '</span></div>' +
     '<p class="stamp-sub">' + esc(sub) + '</p>' +
-    '<ul class="stage-list">' + plan.stages.map((s,i) =>
-      '<li class="stage-item"><span class="stage-num">0' + (i+1) + '</span><div><div class="stage-title">' + esc(s.title) + '</div><div class="stage-purpose">' + esc(s.purpose) + '</div></div></li>'
-    ).join("") + '</ul>' +
+    '<ul class="stage-list">' + stagesHtml + '</ul>' +
+    (!single && n < 4 ? '<div style="text-align:center;margin:0 0 16px;"><button class="stage-ctrl" data-action="stage-add">+ Add a part</button></div>' : '') +
     '<div class="btn-row" style="justify-content:center;">' +
       '<button class="btn btn-primary" data-action="continue-after-staging">Write the prompt' + (single?"":"s") + '</button>' +
       (!single ? '<button class="btn" data-action="collapse-stages" style="font-size:0.85rem;">Combine into one prompt instead</button>' : '') +
@@ -677,6 +713,14 @@ function renderResult(){
     html += '<div class="btn-row" style="justify-content:center;"><button class="btn" id="copy-all-btn" data-action="copy-all">Copy all, in order</button></div>';
   }
 
+  html += '<div class="refine-box">' +
+    '<div class="refine-label">Need a tweak? Describe one change and we\'ll rewrite the prompt' + (multi ? 's' : '') + ' for you.</div>' +
+    '<div class="refine-row">' +
+      '<input type="text" id="refine-input" class="refine-input" placeholder="e.g. make it shorter, more formal, add a constraint…" value="' + esc(state.refineDraft || "") + '"' + (copyDisabled ? ' disabled' : '') + '>' +
+      '<button class="btn btn-primary refine-btn" data-action="submit-refine"' + (copyDisabled ? ' disabled style="opacity:0.4;"' : '') + '>Refine</button>' +
+    '</div>' +
+  '</div>';
+
   if (r.elevatedStakesNotes.length){
     html += '<div class="note-panel note-stakes">' +
       '<div class="note-panel-title">Worth double-checking before you use this</div>' +
@@ -691,6 +735,14 @@ function renderResult(){
     (state.feedbackSent
       ? '<div class="feedback-block"><p style="color:var(--green);font-size:0.9rem;margin:0;">Thanks for the feedback — it helps us improve.</p></div>'
       : '<div class="feedback-block">' +
+          '<div class="fb-section">' +
+            '<div class="fb-section-label">Did it work when you used it?</div>' +
+            '<div class="outcome-row">' +
+              [["worked","Worked as-is"],["edited","Needed edits"],["failed","Didn\'t work"]].map(o =>
+                '<button class="outcome-btn' + (state.promptOutcome === o[0] ? ' sel' : '') + '" data-action="rating-outcome" data-v="' + o[0] + '">' + o[1] + '</button>'
+              ).join("") +
+            '</div>' +
+          '</div>' +
           '<div class="fb-section">' +
             '<div class="fb-section-label">Prompt quality</div>' +
             '<div class="fb-pills">' +
@@ -1020,6 +1072,7 @@ function startTypewriter(){
       typewriterDone = true;
       // Enable copy buttons now that all text is rendered
       document.querySelectorAll(".prompt-copy-btn[data-action='copy-prompt']").forEach(btn => { btn.disabled = false; btn.style.opacity = ""; });
+      enableRefineControls();
       const hint = document.querySelector("[data-action='complete-typewriter']");
       if (hint) hint.remove();
       return;
@@ -1117,6 +1170,16 @@ function setResultsRating(v){
     p.classList.toggle("sel", p.dataset.v === String(v));
   });
   saveFeedbackToDb({ results_rating: v });
+}
+
+// Real-world outcome: did the generated prompt actually work when pasted into
+// the destination AI? This is the highest-signal feedback we collect.
+function setPromptOutcome(v){
+  state.promptOutcome = v;
+  document.querySelectorAll(".outcome-btn").forEach(b => {
+    b.classList.toggle("sel", b.dataset.v === v);
+  });
+  saveFeedbackToDb({ outcome: v });
 }
 
 async function submitFeedback(){
